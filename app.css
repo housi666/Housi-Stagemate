@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.11 · Build 33 · 2026-11-16 */
+/*! Stagemate v0.4.14 · Build 36 · 2026-11-17 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1634,3 +1634,15 @@
 .tips-ai { margin: 0 0 10px; font-weight: 600; }
 .ai-note { margin: 12px 0 0; text-align: center; }
 .tut-btn { margin-left: auto; }
+
+/* v0.4.12 Status unter der Uhr in der Seitenleiste */
+.st-wrap.in-side { display: block; margin: 0 14px 12px; }
+.st-wrap.in-side .st-btn { width: 100%; justify-content: flex-start; }
+.st-wrap.in-side .st-car { margin-left: auto; }
+.st-wrap.in-side .st-menu { left: 0; right: auto; width: 240px; }
+
+/* v0.4.14 Desktop: Flächen im Hauptbereich füllen die Breite und Höhe (auch beim Zoomen im Browser) */
+@media (min-width: 761px) {
+  .cal-card, .gigs-wrap, .sl-wrap, .admin-wrap, .fin-wrap, #page-home { max-width: none; width: 100%; }
+  .cal-scroll { height: max(380px, calc(100vh - 300px)); }
+}

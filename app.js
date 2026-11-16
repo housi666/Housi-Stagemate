@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.11 · Build 33 · 2026-11-16 */
+/*! Stagemate v0.4.14 · Build 36 · 2026-11-17 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -1136,6 +1136,16 @@
   }
   // ================= Startbildschirm: Bands, Profil und Einstellungen auf einem Bildschirm =================
   let inHub = false;
+  // Status-Auswahl: auf der Bandseite (Desktop, Leiste offen) unter der Uhr oben links, sonst in der Kopfzeile oben rechts
+  function placeStatus() {
+    const sw = document.querySelector('.st-wrap'), app = $('app'), sb = document.querySelector('.sidebar');
+    if (!sw || !sb) return;
+    const side = !app.classList.contains('hub-mode') && !sb.classList.contains('collapsed') && window.matchMedia('(min-width: 761px)').matches;
+    const tb = document.querySelector('.topbar');
+    if (side) { if (sw.parentElement !== $('sideClock').parentElement || !sw.classList.contains('in-side')) { $('sideClock').after(sw); sw.classList.add('in-side'); } }
+    else if (sw.parentElement !== tb) { tb.appendChild(sw); sw.classList.remove('in-side'); }
+  }
+  { const mo = new MutationObserver(placeStatus); mo.observe($('app'), { attributes: true, attributeFilter: ['class'] }); mo.observe(document.querySelector('.sidebar'), { attributes: true, attributeFilter: ['class'] }); window.matchMedia('(min-width: 761px)').addEventListener('change', placeStatus); placeStatus(); }
   const accCard = $('accountCard');
   function placeUI(where) {
     const sw = document.querySelector('.settings-wrap');
@@ -2725,6 +2735,22 @@
     const a = document.createElement('a'); a.href = url; a.download = safe + '.' + kind; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }));
 
+  // Setlist -> Timetable des zugewiesenen Gigs (Start, Ende, Songzahl, Verknüpfung)
+  $('slToTT').addEventListener('click', e => {
+    const L = slCur(); if (!L) return;
+    if (!ttCan()) return previewBlocked(e, viewAs ? undefined : 'Keine Berechtigung: Für die Timetable brauchst du das Recht „Bearbeiten“.');
+    const gig = calEvents.find(x => x.id === L.gigId);
+    if (!gig) return flash('Zuerst oben einen Gig zuweisen', true);
+    const T = slTimes(L);
+    if (!T.hasStart) return flash('Zuerst die Beginn-Uhrzeit der Setlist setzen', true);
+    ttSub();
+    const TL = ttList(gig.id), end = slClock(T.base, T.total), songs = T.rows.filter(r => r.num).length;
+    let x = TL.entries.find(en => en.setlistId === L.id);
+    const f = { time: L.start, band: (bands[currentBand] && bands[currentBand].name) || 'Band', end, dur: 0, songs, setlistId: L.id };
+    if (x) Object.assign(x, f); else TL.entries.push({ id: slId(), note: '', ...f });
+    ttSave(gig.id);
+    flash(x ? 'Timetable aktualisiert' : 'In die Timetable eingetragen');
+  });
   // ================= Timetable (Seite 8) =================
   // timetables/<Band>/lists/<gigId> { gigId, entries:[{id,time,title,note}] }
   let ttMap = {}, ttBand = null, ttUnsub = null, ttSel = null, ttPend = null, ttSaveT = null, ttEdit = null;

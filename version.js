@@ -1,16 +1,25 @@
-/*! Stagemate v0.4.11 · Build 33 · 2026-11-16 */
+/*! Stagemate v0.4.14 · Build 36 · 2026-11-17 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.11';
-const APP_BUILD = 33;
-const APP_BUILD_DATE = '2026-11-16';
+const APP_VERSION = 'v0.4.14';
+const APP_BUILD = 36;
+const APP_BUILD_DATE = '2026-11-17';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.14', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Desktop: Kalender, Gigs, Setlist, Songs, Timetable, Verwaltung und Startbildschirm füllen die ganze Breite; die Kalenderhöhe folgt der Fensterhöhe (passt sich beim Zoomen im Browser an den Bildschirmrand an)' },
+  ] },
+  { version: 'v0.4.13', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Setlist: Knopf „In Timetable des Gigs eintragen“ übernimmt Beginn, Ende, Songzahl und Verknüpfung in die Timetable des zugewiesenen Gigs (aktualisiert bei erneutem Klick); sichtbar im Kalender' },
+  ] },
+  { version: 'v0.4.12', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Status-Auswahl (Online, Privat, Offline) steht auf der Bandseite unter der Uhr oben links; auf dem Startbildschirm, bei eingeklappter Leiste und am Handy bleibt sie oben rechts' },
+  ] },
   { version: 'v0.4.11', date: '2026-11-17', items: [
     { type: 'neu', text: 'Nutzungsbedingungen: neuer Abschnitt „Erstellung mit KI“ (App grösstenteils mit Claude erstellt, keine Verantwortung für unbeabsichtigte Rechtsverstösse, soweit gesetzlich zulässig); neue Fassung muss erneut akzeptiert werden' },
     { type: 'neu', text: 'Tipps: oben gut sichtbarer Hinweis „Dieses Tool wurde mit Claude (KI) erstellt“' },
