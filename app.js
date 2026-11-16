@@ -1,4 +1,4 @@
-/*! Stagemate v0.3.6 · Build 21 · 2026-11-16 */
+/*! Stagemate v0.4.0 · Build 22 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -2069,7 +2069,7 @@
     const card = el('div', 'ov-card ov-' + id);
     card.dataset.wid = id;
     const ic = el('span', 'ov-ic'); if (icon === 'stage') { ic.classList.add('svg'); ic.innerHTML = STAGE_SVG; } else ic.textContent = icon;
-    const h = el('div', 'ov-card-h'); h.append(ic, el('span', null, title));
+    const h = el('div', 'ov-card-h'); h.append(ic, el('span', null, title), el('span', 'ov-grip', '⠿'));
     card.appendChild(h);
     return card;
   }
@@ -2667,7 +2667,13 @@
       t.appendChild(card);
     }
 
-    sortedMembers().forEach(m => {
+    const rankOf = m => draftIsAdmin(m.uid) ? 0 : (memberRoles(m, currentBand, draft).includes('Organisation') ? 1 : (memberRoles(m, currentBand, draft).length ? 2 : 3));
+    const RANKS = ['Admins', 'Organisation', 'Mitglieder', 'Ohne Rolle'];
+    const rankSorted = sortedMembers().map((m, i) => ({ m, i })).sort((a, b) => rankOf(a.m) - rankOf(b.m) || a.i - b.i).map(x => x.m);
+    let lastRank = -1;
+    rankSorted.forEach(m => {
+      const rk = rankOf(m);
+      if (rk !== lastRank) { lastRank = rk; t.appendChild(el('div', 'rank-head', RANKS[rk] + ' (' + rankSorted.filter(x => rankOf(x) === rk).length + ')')); }
       const roles = memberRoles(m, currentBand, draft);
       const badges = [];
       if (isFounder(currentBand, m.uid)) badges.push(el('span', 'admin-badge', 'Admin'));

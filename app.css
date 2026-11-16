@@ -1,4 +1,4 @@
-/*! Stagemate v0.3.6 · Build 21 · 2026-11-16 */
+/*! Stagemate v0.4.0 · Build 22 · 2026-11-16 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1494,3 +1494,20 @@
   .dev-btn:hover { background: #fde047; color: #1b1c22; border-color: #ca8a04; }
   @media (max-width: 760px) { .dev-btn { padding: 6px 12px; font-size: 12.5px; } }
   .dev-btn { right: 84px; }
+
+  /* v0.4.0: Handy - Verwaltung ohne Ueberlauf */
+  @media (max-width: 760px) {
+    .inline-add { flex-wrap: wrap; max-width: 100%; }
+    .inline-add select, .inline-add input, .inline-add button { min-width: 0; max-width: 100%; }
+    .inline-add select, .inline-add input { flex: 1 1 100%; width: 100%; }
+    .cat-row { flex-wrap: wrap; }
+    .cat-name, .cat-fixed { min-width: 0; max-width: 100%; }
+    .dz-row { flex-wrap: wrap; }
+    #vaPick { width: 100%; max-width: 100%; }
+  }
+
+  /* v0.4.0: Griff in Band-Uebersicht, Rang-Ueberschriften in Verwaltung */
+  .ov-grip { margin-left: auto; cursor: grab; font-size: 16px; line-height: 1; opacity: .55; letter-spacing: 0; }
+  .ov-card:hover .ov-grip { opacity: 1; }
+  .rank-head { margin: 14px 2px 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .rank-head:first-of-type { margin-top: 4px; }

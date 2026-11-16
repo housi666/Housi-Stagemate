@@ -1,16 +1,22 @@
-/*! Stagemate v0.3.6 · Build 21 · 2026-11-16 */
+/*! Stagemate v0.4.0 · Build 22 · 2026-11-16 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.3.6';
-const APP_BUILD = 21;
+const APP_VERSION = 'v0.4.0';
+const APP_BUILD = 22;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.0', date: '2026-11-16', items: [
+    { type: 'neu', text: 'Bandseite → Verwaltung: Mitglieder nach Rang gruppiert (Admins, Organisation, Mitglieder, ohne Rolle)' },
+    { type: 'fix', text: 'Bandseite → Übersicht: Griff zum Verschieben wieder sichtbar' },
+    { type: 'fix', text: 'Handy: Verwaltung läuft nicht mehr über den Bildschirmrand (Auswahlfelder, Rollen, Kategorien)' },
+    { type: 'besser', text: 'Handy-Darstellung auf allen Seiten bei 360 und 390 Pixel Breite geprüft' },
+  ] },
   { version: 'v0.3.6', date: '2026-11-16', items: [
     { type: 'neu', text: 'Persönliche Übersicht: Anzeige „Schnell erstellen“ (Gig, Termin, Checkliste; Setlist folgt)' },
     { type: 'neu', text: 'Changelog-Knopf neben Nutzungsbedingungen und Datenschutz: ganzer Changelog, verschachtelt nach Version' },
