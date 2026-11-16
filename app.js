@@ -381,7 +381,7 @@
     Object.keys(editRoles).sort().forEach(k => { roles[k] = [...editRoles[k]].sort(); });
     const code = $('fCode').value.trim(), bname = $('fBandName').value.trim();
     const nb = newBandMode !== 'none' && (code || bname || newRoles.size) ? [newBandMode, code, bname, [...newRoles].sort().join(',')].join('|') : '';
-    return JSON.stringify({ n: $('fName').value.trim(), e: $('fEmail').value.trim(), p: $('fPhone').value.trim(), ph: currentPhoto() || null, r: roles, nb });
+    return JSON.stringify({ n: $('fName').value.trim(), fn: $('fFirst').value.trim(), ln: $('fLast').value.trim(), t: $('fTerms').checked, e: $('fEmail').value.trim(), p: $('fPhone').value.trim(), ph: currentPhoto() || null, r: roles, nb });
   }
   const isProfileDirty = () => !!profile && !!profileSnap && !$('app').classList.contains('hidden') && profileState() !== profileSnap;
   ['input', 'change', 'click'].forEach(ev => form.addEventListener(ev, () => setTimeout(updateDirty, 0)));
@@ -390,7 +390,13 @@
     const ids = bandIdsOf(profile);
     const hasBands = ids.length > 0;
     $('fName').value = profile?.name || suggestedName || '';
+    $('fFirst').value = profile?.firstName || '';
+    $('fLast').value = profile?.lastName || '';
     $('fEmail').value = profile?.email || suggestedEmail || '';
+    // Web-Version: die E-Mail des Kontos gilt, kein zweites E-Mail-Feld
+    $('fEmailField').classList.toggle('hidden', Data.backend === 'firebase');
+    $('fTerms').checked = false;
+    $('termsWrap').classList.toggle('hidden', !needsTerms());
     $('fPhone').value = profile?.phone || '';
     photoDraft = undefined; setMsg($('photoMsg'), ''); renderPhoto();
     $('fCode').value = ''; $('fBandName').value = '';
@@ -437,9 +443,14 @@
     ev.preventDefault();
     const msg = $('regMsg');
     const name = $('fName').value.trim();
-    const email = $('fEmail').value.trim();
+    const firstName = $('fFirst').value.trim(), lastName = $('fLast').value.trim();
+    const email = Data.backend === 'firebase' ? (Data.email || '') : $('fEmail').value.trim();
+    const acceptTerms = needsTerms();
     const phone = $('fPhone').value.trim();
-    if (name.length < 2) return setMsg(msg, 'Bitte gib deinen Namen ein.', 'error');
+    if (name.length < 2) return setMsg(msg, 'Bitte gib einen Nickname ein (mind. 2 Zeichen).', 'error');
+    if (!firstName) return setMsg(msg, 'Bitte gib deinen Vornamen ein.', 'error');
+    if (!lastName) return setMsg(msg, 'Bitte gib deinen Nachnamen ein.', 'error');
+    if (acceptTerms && !$('fTerms').checked) return setMsg(msg, 'Bitte akzeptiere die Nutzungsbedingungen und die Datenschutzerklärung.', 'error');
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setMsg(msg, 'Die E-Mail-Adresse sieht nicht gültig aus.', 'error');
     for (const id in editRoles) {
       if (editRoles[id].size === 0) return setMsg(msg, `Bitte wähle mindestens eine Rolle für „${bands[id].name}“.`, 'error');
@@ -457,7 +468,8 @@
     try {
       const now = new Date().toISOString();
       const p = profile ? clone(profile) : { createdAt: now, bandIds: [], memberships: {} };
-      p.name = name; p.email = email; p.phone = phone; p.updatedAt = now;
+      p.name = name; p.firstName = firstName; p.lastName = lastName; p.email = email; p.phone = phone; p.updatedAt = now;
+      if (acceptTerms) p.terms = { version: LEGAL_VERSION, acceptedAt: now };
       if (photoDraft !== undefined) { if (photoDraft) p.photo = photoDraft; else delete p.photo; }
       p.bandIds = bandIdsOf(p);
       p.memberships = p.memberships || {};
@@ -488,7 +500,7 @@
       else if (added) text = `Willkommen bei „${added.name}“!`;
       setMsg(msg, text, 'ok');
 
-      if (isNew || added || !$('app').classList.contains('hidden')) {
+      if (isNew || added || acceptTerms || !$('app').classList.contains('hidden')) {
         setTimeout(() => {
           enterApp(added ? added.id : currentBand);
           if (!isNew) { prepareForm(); setMsg($('regMsg'), text, 'ok'); flash('Profil gespeichert ✓'); }
@@ -504,6 +516,86 @@
     }
   });
 
+  // ================= Nutzungsbedingungen & Datenschutz =================
+  const needsTerms = () => !profile || !profile.terms || profile.terms.version !== LEGAL_VERSION;
+  function openLegal(tab) {
+    const show = t => {
+      document.querySelectorAll('[data-legal-tab]').forEach(b => b.classList.toggle('on', b.dataset.legalTab === t));
+      $('legalBody').innerHTML = t === 'privacy' ? LEGAL_PRIVACY : LEGAL_TERMS;
+      $('legalBody').scrollTop = 0;
+    };
+    show(tab === 'privacy' ? 'privacy' : 'terms');
+    $('legalVer').textContent = 'Fassung vom ' + LEGAL_VERSION.split('-').reverse().join('.');
+    $('legalModal').classList.remove('hidden');
+    if (!openLegal.bound) {
+      openLegal.bound = true;
+      document.querySelectorAll('[data-legal-tab]').forEach(b => b.addEventListener('click', () => show(b.dataset.legalTab)));
+    }
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-legal]');
+    if (b) { e.preventDefault(); e.stopPropagation(); openLegal(b.dataset.legal); }
+  }, true);
+  $('legalClose').addEventListener('click', () => $('legalModal').classList.add('hidden'));
+  $('legalModal').addEventListener('click', e => { if (e.target === $('legalModal')) $('legalModal').classList.add('hidden'); });
+
+  // ================= Passwort ansehen (nur solange gedrückt) =================
+  const EYE_SVG = '<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  function enhancePw(input) {
+    if (!input || input.dataset.pwEnh) return;
+    input.dataset.pwEnh = '1';
+    const wrap = el('span', 'pw-wrap');
+    input.parentNode.insertBefore(wrap, input); wrap.appendChild(input);
+    const b = el('button', 'pw-eye'); b.type = 'button'; b.tabIndex = -1; b.innerHTML = EYE_SVG;
+    b.title = 'Gedrückt halten, um das Passwort zu sehen'; b.setAttribute('aria-label', b.title);
+    const show = e => { e.preventDefault(); input.type = 'text'; b.classList.add('on'); };
+    const hide = () => { input.type = 'password'; b.classList.remove('on'); };
+    b.addEventListener('pointerdown', show);
+    ['pointerup', 'pointerleave', 'pointercancel', 'blur'].forEach(ev => b.addEventListener(ev, hide));
+    b.addEventListener('contextmenu', e => e.preventDefault());
+    wrap.appendChild(b);
+  }
+  ['accPwOld', 'accPwNew', 'accPwNew2', 'accDelPw'].forEach(id => enhancePw($(id)));
+
+  // ================= Konto (nur Web-Version) =================
+  function renderAccount() {
+    const on = Data.backend === 'firebase';
+    $('accountCard').classList.toggle('hidden', !on);
+    if (!on) return;
+    $('accEmail').textContent = Data.email || '';
+  }
+  $('accPwBtn').addEventListener('click', async () => {
+    const m = $('accPwMsg'), oldPw = $('accPwOld').value, n1 = $('accPwNew').value, n2 = $('accPwNew2').value;
+    if (!oldPw) return setMsg(m, 'Bitte gib dein aktuelles Passwort ein.', 'error');
+    if (n1.length < 6) return setMsg(m, 'Das neue Passwort braucht mindestens 6 Zeichen.', 'error');
+    if (n1 !== n2) return setMsg(m, 'Die beiden neuen Passwörter stimmen nicht überein.', 'error');
+    if (n1 === oldPw) return setMsg(m, 'Das neue Passwort ist gleich wie das alte.', 'error');
+    $('accPwBtn').disabled = true; setMsg(m, 'Wird geändert …');
+    const r = await Data.changePassword(oldPw, n1);
+    $('accPwBtn').disabled = false;
+    if (!r.ok) return setMsg(m, /credential|wrong-password/.test(r.code || '') ? 'Das aktuelle Passwort stimmt nicht.' : r.error, 'error');
+    ['accPwOld', 'accPwNew', 'accPwNew2'].forEach(id => $(id).value = '');
+    setMsg(m, 'Passwort geändert ✓', 'ok'); flash('Passwort geändert ✓');
+  });
+  $('accDelBtn').addEventListener('click', async () => {
+    const m = $('accDelMsg'), pw = $('accDelPw').value;
+    const own = bandIdsOf(profile).filter(id => isFounder(id));
+    if (own.length) return setMsg(m, `Du bist Gründer/Admin von „${own.map(id => bands[id].name).join('“, „')}“. Löse die Band zuerst auf (Verwaltung → Band auflösen).`, 'error');
+    if (!$('accDelOk').checked) return setMsg(m, 'Bitte bestätige zuerst mit dem Häkchen.', 'error');
+    if (!pw) return setMsg(m, 'Bitte gib dein Passwort ein.', 'error');
+    $('accDelBtn').disabled = true; setMsg(m, 'Konto wird gelöscht …');
+    const r = await Data.reauthenticate(pw);
+    if (!r.ok) { $('accDelBtn').disabled = false; return setMsg(m, /credential|wrong-password/.test(r.code || '') ? 'Das Passwort stimmt nicht.' : r.error, 'error'); }
+    try {
+      await Promise.all(bandIdsOf(profile).map(id => db.doc(`bandadmin/${uid}/bands/${id}`).delete().catch(() => {})));
+      await db.doc('members/' + uid).delete();
+    } catch (e) { $('accDelBtn').disabled = false; return setMsg(m, 'Die Profildaten konnten nicht gelöscht werden. Bitte versuche es nochmals.', 'error'); }
+    const d = await Data.deleteAccount();
+    if (!d.ok) { $('accDelBtn').disabled = false; return setMsg(m, d.error, 'error'); }
+    ls.sdel('bandLoggedIn');
+    location.reload();
+  });
+
   // ================= Anmeldeseite =================
   function showTab(t) {
     activeTab = t;
@@ -517,7 +609,9 @@
     const loading = mode === 'loading';
     $('loadingBox').classList.toggle('hidden', !loading);
     $('demoBanner').classList.toggle('hidden', mode !== 'local');
-    $('footnote').classList.toggle('hidden', mode === 'local');
+    $('footnote').classList.toggle('hidden', mode === 'local' || Data.backend === 'firebase');
+    // Web-Version: das Konto ist schon angemeldet – nur noch das Profil anlegen bzw. ergänzen
+    { const t = document.querySelector('#auth .auth-side .card > .tabs'); if (t) t.classList.toggle('hidden', Data.backend === 'firebase'); }
     $('loginPane').classList.toggle('hidden', loading || activeTab !== 'login');
     $('registerSlot').classList.toggle('hidden', loading || activeTab !== 'register');
     if (loading) return;
@@ -534,7 +628,7 @@
   }
 
   $('loginBtn').addEventListener('click', () => {
-    if (!bandIdsOf(profile).length) return showTab('register');
+    if (!bandIdsOf(profile).length || needsTerms()) return showTab('register');
     enterApp(profile.lastBand);
   });
 
@@ -635,6 +729,7 @@
     $('page-overview').classList.toggle('hidden', page !== 'overview');
     if (page === 'overview') renderOverview();
     $('page-profile').classList.toggle('hidden', page !== 'profile');
+    if (page === 'profile') renderAccount();
     $('page-team').classList.toggle('hidden', page !== 'team');
     $('page-settings').classList.toggle('hidden', page !== 'settings');
     $('page-placeholder').classList.toggle('hidden', !reg || page === 'page2' || page === 'page3' || page === 'page4' || page === 'page5');
@@ -4516,7 +4611,10 @@
       { icon: '💡', title: 'Tipps', text: 'Dieser Knopf unten links zeigt immer die Tipps zur Seite, auf der du gerade bist. Beim Öffnen der App blinkt er kurz zur Erinnerung.' },
       { icon: '⚙️', title: 'Einstellungen', text: 'Unten links: Darstellung (Hell, Dunkel, Automatisch), Mauszeiger, Uhr & Datum, Sichtbarkeit deiner Kontaktangaben pro Band und die Sortierung der Checkliste.' },
       { icon: '🚧', title: 'Pre-Alpha', text: 'Stagemate ist noch in einer frühen Pre-Alpha-Version und verändert sich laufend. Die aktuelle Versionsnummer steht ganz unten links. Der Hinweis dazu erscheint jedes Mal auf dem Anmeldebildschirm und lässt sich dort über das Abzeichen „Pre-Alpha“ wieder öffnen.' },
-      { icon: '💬', title: 'Support', text: 'Unten links „Support“ öffnet ein Fenster mit den Links zu Instagram und TikTok (housi_666) sowie Facebook (Housi Guntern) – für Fragen, Probleme oder Ideen.' },
+      { icon: '💬', title: 'Support', text: 'Unten links „Support“ öffnet ein Fenster mit den Links zu Instagram und TikTok (housi_666) – für Fragen, Probleme oder Ideen.' },
+      { icon: '👁', title: 'Passwort ansehen', text: 'Das Auge im Passwortfeld gedrückt halten – solange du drückst, siehst du das Passwort im Klartext.' },
+      { icon: '🔐', title: 'Konto', text: 'Web-Version: Unter „Profil & Bands“ → „Konto“ änderst du dein Passwort oder löschst dein Konto. Gründer/Admins lösen vorher ihre Band auf.' },
+      { icon: '📜', title: 'Nutzungsbedingungen & Datenschutz', text: 'Findest du unten im Startbildschirm und im Support-Fenster. Bei einer neuen Fassung musst du sie beim nächsten Anmelden erneut akzeptieren.' },
     ];
     if (currentPage === 'settings') general.splice(general.findIndex(g => g.icon === '⚙️'), 1);
     sec('Allgemein', general);
@@ -4633,11 +4731,15 @@
         $('fbHint').textContent = up ? 'Erstelle dein Stagemate-Konto. Danach trittst du deiner Band bei oder gründest eine.' : 'Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.';
         $('fbPw2Wrap').classList.toggle('hidden', !up);
         $('fbPw').autocomplete = up ? 'new-password' : 'current-password';
+        $('fbEmail').autocomplete = up ? 'off' : 'email';
+        // Angaben aus „Anmelden“ nicht in „Konto erstellen“ übernehmen (und umgekehrt)
+        ['fbEmail', 'fbPw', 'fbPw2'].forEach(id => { $(id).value = ''; $(id).type = id === 'fbEmail' ? 'email' : 'password'; });
         $('fbGo').textContent = up ? 'Konto erstellen' : 'Anmelden';
         $('fbReset').classList.toggle('hidden', up);
         setMsg($('fbMsg'), '');
       };
       fbPane.querySelectorAll('[data-fbtab]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.fbtab)));
+      enhancePw($('fbPw')); enhancePw($('fbPw2'));
       $('fbForm').addEventListener('submit', async e => {
         e.preventDefault();
         const email = $('fbEmail').value.trim(), pw = $('fbPw').value;
@@ -4673,6 +4775,8 @@
   function finish() {
     prepareForm();
     showTab(profile ? 'login' : 'register');
+    // Neue Fassung der Nutzungsbedingungen: zuerst akzeptieren
+    if (profile && needsTerms()) { showTab('register'); setMsg($('regMsg'), 'Bitte akzeptiere die Nutzungsbedingungen, um weiterzumachen.', 'error'); return; }
     // Web-Version: nach der Konto-Anmeldung direkt in die App
     if (profile && bandIdsOf(profile).length && (ls.sget('bandLoggedIn') === '1' || Data.backend === 'firebase')) enterApp(profile.lastBand);
   }

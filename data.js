@@ -121,6 +121,7 @@
     'auth/weak-password': 'Das Passwort ist zu schwach (mindestens 6 Zeichen).',
     'auth/too-many-requests': 'Zu viele Versuche. Bitte warte kurz und versuche es nochmals.',
     'auth/network-request-failed': 'Keine Verbindung zum Server. Prüfe deine Internetverbindung.',
+    'auth/requires-recent-login': 'Bitte melde dich aus Sicherheitsgründen neu an und versuche es nochmals.',
     'auth/operation-not-allowed': 'Anmelden mit E-Mail/Passwort ist in Firebase noch nicht eingeschaltet.',
   };
   const fbError = e => FB_ERRORS[e && e.code] || ('Das hat nicht geklappt' + (e && e.code ? ' (' + e.code + ')' : '') + '.');
@@ -146,6 +147,20 @@
   const signIn = (email, pw) => fbCall(a => a.signInWithEmailAndPassword(String(email || '').trim(), pw || ''));
   const signUp = (email, pw) => fbCall(a => a.createUserWithEmailAndPassword(String(email || '').trim(), pw || ''));
   const resetPassword = email => fbCall(a => a.sendPasswordResetEmail(String(email || '').trim()));
+  // Passwort bestätigen (nötig vor Passwortänderung und Kontolöschung)
+  async function reauthenticate(pw) {
+    return fbCall(async a => {
+      const u = a.currentUser; if (!u) throw { code: 'auth/user-not-found' };
+      await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email, pw || ''));
+    });
+  }
+  async function changePassword(oldPw, newPw) {
+    const r = await reauthenticate(oldPw); if (!r.ok) return r;
+    return fbCall(a => a.currentUser.updatePassword(newPw));
+  }
+  // Löscht das Anmeldekonto (vorher reauthenticate aufrufen und die eigenen Daten löschen)
+  const deleteAccount = () => fbCall(a => a.currentUser.delete());
+
   async function signOut() {
     if (state.backend === 'firebase' && fbAuth) { try { await fbAuth.signOut(); } catch (e) {} location.reload(); return true; }
     return false;
@@ -245,7 +260,7 @@
     get name() { return state.name; },
     get email() { return state.email; },
     get usesFirebase() { return !!fbConfig(); },
-    signIn, signUp, resetPassword, signOut,
+    signIn, signUp, resetPassword, signOut, reauthenticate, changePassword, deleteAccount,
     get readOnly() { return state.readOnly; },
   });
 })();

@@ -1060,3 +1060,39 @@
   .card.fb-mode > :not(#fbAuthPane) { display: none !important; }
   #fbAuthPane h2 { margin: 0 0 6px; }
   #fbAuthPane .btn { width: 100%; }
+
+  /* ---- v0.1.6: Registrierung, Konto, Rechtstexte, Housi-Logo ---- */
+  .name-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  @media (max-width: 480px) { .name-grid { grid-template-columns: 1fr; } }
+  .terms-check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.5; margin: 4px 0 16px; cursor: pointer; }
+  .terms-check input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--accent); flex: none; }
+  .terms-check .linkish-btn { font-size: 13px; padding: 0; }
+  .pw-wrap { position: relative; display: block; }
+  .pw-wrap input { width: 100%; padding-right: 44px !important; }
+  .pw-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border: none; background: none; border-radius: 8px; color: var(--muted); cursor: pointer; display: grid; place-items: center; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .pw-eye svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+  .pw-eye:hover { background: var(--hover); color: var(--text); }
+  .pw-eye.on { color: var(--accent-dark); }
+  .account-card { margin-top: 18px; }
+  .acc-box { border: 1px solid var(--border); border-radius: 12px; padding: 0 16px; margin-top: 12px; }
+  .acc-box[open] { padding-bottom: 16px; }
+  .acc-box summary { cursor: pointer; font-weight: 600; font-size: 14px; padding: 14px 0; list-style: none; }
+  .acc-box summary::-webkit-details-marker { display: none; }
+  .acc-box summary::after { content: '›'; float: right; transition: transform .2s; color: var(--muted); }
+  .acc-box[open] summary::after { transform: rotate(90deg); }
+  .acc-box.danger summary { color: var(--error); }
+  .danger-btn { background: var(--error) !important; color: #fff !important; border-color: var(--error) !important; }
+  .legal-modal { max-width: 640px; }
+  .legal-modal .seg { margin-bottom: 14px; }
+  .legal-body { max-height: 60vh; overflow-y: auto; font-size: 13.5px; line-height: 1.55; padding-right: 6px; }
+  .legal-body h4 { font-size: 14px; margin: 16px 0 4px; }
+  .legal-body h4:first-child { margin-top: 0; }
+  .legal-body p { margin: 0 0 8px; }
+  .legal-body ul { margin: 0 0 8px; padding-left: 20px; }
+  .legal-ver { font-size: 12px; color: var(--muted); margin: 12px 0 0; }
+  .legal-link { border: none; background: none; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
+  .legal-link:hover { color: var(--accent); }
+  .support-legal { font-size: 12.5px; margin: 14px 0 0; color: var(--muted); }
+  .housi-mark { position: fixed; right: 14px; bottom: 10px; width: 62px; color: var(--text); opacity: .28; pointer-events: none; z-index: 5; line-height: 0; }
+  .housi-mark svg { width: 100%; height: auto; display: block; }
+  @media (max-width: 760px) { .housi-mark { width: 46px; right: 8px; bottom: 6px; } }
