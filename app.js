@@ -1,4 +1,4 @@
-/*! Stagemate v0.3.1 · Build 16 · 2026-11-16 */
+/*! Stagemate v0.3.2 · Build 17 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -1096,23 +1096,63 @@
       if (sw.parentElement !== $('page-settings')) $('page-settings').append(sw);
     }
   }
-  let hubFolded = { profile: true, settings: true };
-  try { hubFolded = { ...hubFolded, ...JSON.parse(ls.get('hubFolded') || '{}') }; } catch (e) {}
-  const saveHubFold = () => { try { ls.set('hubFolded', JSON.stringify(hubFolded)); } catch (e) {} };
-  document.querySelectorAll('.hub-sec').forEach(sec => {
-    const k = sec.dataset.hub;
-    sec.classList.toggle('folded', !!hubFolded[k]);
-    sec.querySelector('.hub-head').addEventListener('click', () => { sec.classList.toggle('folded'); hubFolded[k] = sec.classList.contains('folded'); saveHubFold(); });
+  // ----- Persönliche Übersicht: Anzeigen (Widgets), verschiebbar und in der Breite änderbar -----
+  const HUB_DEFAULT = { order: ['bands', 'agenda', 'tasks', 'profile', 'settings'], wide: { bands: false, agenda: false, tasks: false, profile: true, settings: true } };
+  let hubLayout = clone(HUB_DEFAULT);
+  try { const sv = JSON.parse(ls.get('hubLayout') || 'null'); if (sv && Array.isArray(sv.order)) hubLayout = { order: sv.order, wide: { ...HUB_DEFAULT.wide, ...(sv.wide || {}) } }; } catch (e) {}
+  const saveHubLayout = () => { try { ls.set('hubLayout', JSON.stringify(hubLayout)); } catch (e) {} };
+  const hubSecs = () => [...$('hubGrid').querySelectorAll(':scope > .hub-sec')];
+  function applyHubLayout() {
+    const grid = $('hubGrid'), map = {};
+    hubSecs().forEach(sec => { map[sec.dataset.hub] = sec; });
+    const order = [...hubLayout.order.filter(k => map[k]), ...Object.keys(map).filter(k => !hubLayout.order.includes(k))];
+    order.forEach(k => { grid.append(map[k]); map[k].classList.toggle('wide', !!hubLayout.wide[k]); const w = map[k].querySelector('.hub-wide'); if (w) w.title = hubLayout.wide[k] ? 'Halbe Breite' : 'Ganze Breite'; });
+  }
+  hubSecs().forEach(sec => {
+    const k = sec.dataset.hub, old = sec.querySelector('.hub-head');
+    // Kopf: Griff zum Verschieben, Titel, Zähler, Breite
+    const head = el('div', 'hub-head');
+    const drag = el('span', 'hub-drag', '⠿'); drag.title = 'Anzeige verschieben (ziehen)'; drag.setAttribute('aria-label', 'Anzeige verschieben');
+    const title = el('span', 'hub-title'); title.append(...old.childNodes);
+    const wide = el('button', 'hub-wide', '⇔'); wide.type = 'button';
+    wide.addEventListener('click', () => { hubLayout.wide[k] = !hubLayout.wide[k]; saveHubLayout(); applyHubLayout(); });
+    head.append(drag, title, wide); old.replaceWith(head);
+    sec.classList.remove('folded');
+    drag.addEventListener('pointerdown', e => startHubDrag(e, sec));
   });
-  document.querySelectorAll('[data-hub-all]').forEach(b => b.addEventListener('click', () => {
-    const close = b.dataset.hubAll === 'close';
-    document.querySelectorAll('.hub-sec').forEach(sec => { sec.classList.toggle('folded', close); hubFolded[sec.dataset.hub] = close; });
-    saveHubFold();
-  }));
+  applyHubLayout();
+  $('hubLayoutReset').addEventListener('click', () => { hubLayout = clone(HUB_DEFAULT); saveHubLayout(); applyHubLayout(); flash('Anordnung zurückgesetzt'); });
+  function startHubDrag(e, sec) {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    const grid = $('hubGrid');
+    sec.classList.add('dragging'); document.body.classList.add('hub-dragging');
+    let lastY = e.clientY;
+    const move = ev => {
+      ev.preventDefault();
+      // am Rand automatisch scrollen
+      const sc = $('app').querySelector('main') || document.scrollingElement;
+      if (ev.clientY < 70) sc.scrollBy(0, -14); else if (ev.clientY > innerHeight - 50) sc.scrollBy(0, 14);
+      const under = document.elementFromPoint(ev.clientX, ev.clientY);
+      const tgt = under && under.closest('.hub-sec');
+      if (!tgt || tgt === sec || tgt.parentElement !== grid) return;
+      const r = tgt.getBoundingClientRect();
+      const sameRow = Math.abs(r.top - sec.getBoundingClientRect().top) < 20 && !tgt.classList.contains('wide') && !sec.classList.contains('wide');
+      const before = sameRow ? ev.clientX < r.left + r.width / 2 : ev.clientY < r.top + r.height / 2;
+      grid.insertBefore(sec, before ? tgt : tgt.nextSibling);
+      lastY = ev.clientY;
+    };
+    const up = () => {
+      document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up);
+      sec.classList.remove('dragging'); document.body.classList.remove('hub-dragging');
+      hubLayout.order = hubSecs().map(x => x.dataset.hub); saveHubLayout();
+    };
+    document.addEventListener('pointermove', move, { passive: false });
+    document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
+  }
   function openHubSection(k, target) {
     if (currentPage !== 'home') showPage('home');
     const sec = document.querySelector(`.hub-sec[data-hub="${k}"]`);
-    sec.classList.remove('folded'); hubFolded[k] = false; saveHubFold();
     if (target && target.classList) target.classList.remove('folded');
     setTimeout(() => (target || sec).scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
   }
@@ -1273,11 +1313,38 @@
   const PRES_TTL = 150000;
   let presSince = Date.now(), presTimer = null, lastBeat = 0;
   const presCache = {}, bandMembersCache = {};
+  // Eigener Status: auto (Übersicht = Privat, Bandseite = Online) | online | private | offline
+  let myStatus = ls.get('myStatus') || 'auto', offSince = Date.now();
+  const effStatus = () => myStatus === 'auto' ? (inHub ? 'private' : 'online') : myStatus;
   async function beat(state = 'online') {
     if (!db || !uid || readOnly || !profile) return;
     lastBeat = Date.now();
-    try { await db.doc('presence/' + uid).set({ online: state === 'online', private: state === 'online' && inHub, since: presSince, lastSeen: Date.now() }); } catch (e) {}
+    const eff = state === 'online' ? effStatus() : 'offline';
+    // "Offline" (selbst gewählt): kein Lebenszeichen, "zuletzt online" bleibt beim Zeitpunkt des Wechsels
+    const seen = eff === 'offline' && state === 'online' ? offSince : Date.now();
+    try { await db.doc('presence/' + uid).set({ online: eff !== 'offline', private: eff === 'private', since: presSince, lastSeen: seen }); } catch (e) {}
+    renderStatusBtn();
   }
+  const ST_TXT = { online: 'Online', private: 'Privat', offline: 'Offline' };
+  function renderStatusBtn() {
+    const b = $('statusBtn'); if (!b) return;
+    const eff = effStatus();
+    b.classList.remove('on', 'priv', 'off'); b.classList.add(eff === 'online' ? 'on' : eff === 'private' ? 'priv' : 'off');
+    $('statusTxt').textContent = ST_TXT[eff] + (myStatus === 'auto' ? ' · auto' : '');
+    b.title = 'Dein Status: ' + ST_TXT[eff] + (myStatus === 'auto' ? ' (automatisch)' : '') + ' – klicken zum Ändern';
+    document.querySelectorAll('#statusMenu [data-st]').forEach(x => x.classList.toggle('on', x.dataset.st === myStatus));
+  }
+  $('statusBtn').addEventListener('click', e => { e.stopPropagation(); const m = $('statusMenu'), open = m.classList.toggle('hidden') === false; $('statusBtn').setAttribute('aria-expanded', String(open)); });
+  document.addEventListener('click', e => { if (!e.target.closest('.st-wrap')) { $('statusMenu').classList.add('hidden'); $('statusBtn').setAttribute('aria-expanded', 'false'); } });
+  document.querySelectorAll('#statusMenu [data-st]').forEach(x => x.addEventListener('click', () => {
+    const was = effStatus();
+    myStatus = x.dataset.st; ls.set('myStatus', myStatus);
+    if (effStatus() === 'offline' && was !== 'offline') offSince = Date.now();
+    if (was === 'offline' && effStatus() !== 'offline') presSince = Date.now();
+    $('statusMenu').classList.add('hidden');
+    beat(); refreshOnline();
+    flash('Dein Status: ' + ST_TXT[effStatus()]);
+  }));
   function startPresence() {
     if (!presTimer) { presSince = Date.now(); beat(); presTimer = setInterval(() => { if (!document.hidden) { beat(); refreshOnline(); } }, 60000); }
     else beat();   // Wechsel Startbildschirm <-> Band sofort melden (Privat / Online)
@@ -1301,7 +1368,7 @@
         bandMembersCache[bid] = q.docs.map(d => ({ uid: d.id, ...d.data() })).filter(m => isActiveIn(m, bid, bands[bid].cfg));
       }
       await Promise.all(bandMembersCache[bid].map(async m => {
-        if (m.uid === uid) { presCache[uid] = { online: true, private: inHub, since: presSince, lastSeen: Date.now() }; return; }
+        if (m.uid === uid) { const eff = effStatus(); presCache[uid] = { online: eff !== 'offline', private: eff === 'private', since: presSince, lastSeen: eff === 'offline' ? offSince : Date.now() }; return; }
         try { const s = await db.doc('presence/' + m.uid).get(); presCache[m.uid] = s.exists ? s.data() : null; } catch (e) {}
       }));
     } catch (e) {}
@@ -5585,10 +5652,10 @@
       if (Data.backend === 'firebase') {
         const r = await Data.devSignIn(devEmail(id), pw);
         if (!r.ok) return setMsg($('devMsg'), r.error + (r.uid ? ` (UID: ${r.uid})` : ''), 'error');
-        devDb = r.db; $('devWho').textContent = `${devEmail(id)} · Firebase`;
+        devDb = r.db; devUid = r.uid; $('devWho').textContent = `${devEmail(id)} · Firebase`;
       } else {
         if (await sha256(id + '|' + pw) !== DEV_HASH) return setMsg($('devMsg'), 'ID oder Passwort stimmt nicht.', 'error');
-        devDb = rawDb; $('devWho').textContent = `${id} · lokale Daten (${Data.backend})`;
+        devDb = rawDb; devUid = uid; $('devWho').textContent = `${id} · lokale Daten (${Data.backend})`;
       }
       closeDevModal(); $('devPw').value = '';
       $('devPanel').classList.remove('hidden'); syncDevBtn();
@@ -5608,9 +5675,13 @@
   let devSearchT = null;
   $('devSearch').addEventListener('input', () => { clearTimeout(devSearchT); devSearchT = setTimeout(devRender, 150); });
   async function devAll(path) {
-    try { const q = await devDb.collection(path).get(); return q.docs.map(d => ({ id: d.id, ...(d.data() || {}) })); }
-    catch (e) { return { error: (e && (e.code || e.message)) || 'Fehler' }; }
+    try {
+      const q = await Promise.race([devDb.collection(path).get(), new Promise((_, rej) => setTimeout(() => rej({ code: 'Zeitüberschreitung (15 s)' }), 15000))]);
+      return q.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
+    }
+    catch (e) { console.warn('[Entwickler]', path, e); return { error: (e && (e.code || e.message)) || 'Fehler' }; }
   }
+  let devUid = null;
   async function devLoad() {
     if (!devDb) return;
     const body = $('devBody'); body.innerHTML = ''; body.append(el('div', 'dev-note', 'Daten werden geladen …'));
@@ -5634,7 +5705,16 @@
     const q = $('devSearch').value.trim().toLowerCase();
     const hit = (...xs) => !q || xs.some(x => String(x == null ? '' : x).toLowerCase().includes(q));
     const B = devArr(devData.bands), M = devArr(devData.members), C = devArr(devData.contacts);
+    // Diagnose: was wurde geladen, wo gab es Fehler
+    const diag = el('div', 'dev-diag');
+    const cnt = k => devData[k] && devData[k].error ? `${k}: Fehler (${devData[k].error})` : `${k}: ${devArr(devData[k]).length}`;
+    diag.append(el('b', null, 'Diagnose: '), `Speicher ${Data.backend === 'firebase' ? 'Firebase (housi-stagemate)' : Data.backend === 'claude' ? 'Claude-Artefakt (nur Daten dieses Artefakts)' : 'nur dieser Browser (lokal)'} · Entwickler-UID ${devUid || '–'} · ` + ['bands', 'members', 'contacts', 'presence'].map(cnt).join(' · '));
+    body.append(diag);
     ['bands', 'members', 'contacts', 'presence'].forEach(k => { const e = devErr(k, devData[k]); if (e) body.append(e); });
+    if (!devArr(devData.bands).length && !devArr(devData.members).length && !['bands', 'members'].some(k => devData[k] && devData[k].error))
+      body.append(el('div', 'msg error', Data.backend === 'firebase'
+        ? 'In Firebase sind noch keine Bands und Benutzer gespeichert. Erzeuge zuerst die Testdaten (testdaten.html) oder registriere ein Konto in der Web-Version.'
+        : 'In diesem Speicher sind keine Daten. Die Artefakt-Version sieht nur ihre eigenen Daten – für alle echten Daten den Entwickler-Zugang in der Web-Version (GitHub-Link) benutzen.'));
     const bandName = id => (B.find(b => b.id === id) || {}).name || id;
     const mail = id => (C.find(c => c.id === id) || {}).email || '';
     if (devTab === 'stats') {
