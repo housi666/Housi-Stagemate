@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stagemate v0.1.5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<script>
+  (function () {
+    var t = 'system';
+    try { t = localStorage.getItem('bandTheme') || 'system'; } catch (e) {}
+    var dark = t === 'dark' || (t === 'system' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  })();
+</script>
+</head>
+<body>
+
+<template id="logoTpl">
+  <svg viewBox="0 0 40 40" aria-label="Logo">
+    <rect width="40" height="40" rx="10" fill="#e8a33d"/>
+    <path d="M24 9v15.5a4.5 4.5 0 1 1-3-4.24V12.5l-6 1.6V27a4.5 4.5 0 1 1-3-4.24V11.6L24 9z" fill="#15161c"/>
+  </svg>
+</template>
+
+<!-- ================= Willkommen / Anmeldung ================= -->
+<div id="auth">
+  <section class="hero">
+    <div class="hero-brand">
+      <span class="logo-slot"></span>
+      <div>
+        <div class="name">Stagemate</div>
+        <div class="sub">Band-Verwaltung</div>
+      </div>
+      <button type="button" class="alpha-badge" id="alphaBadge" title="Hinweis zur Pre-Alpha-Version">Pre-Alpha</button>
+    </div>
+    <div>
+      <h1>Willkommen bei <span>Stagemate</span></h1>
+      <p class="lead">Hier kannst du mit deiner Band Gigs, Termine, Checklisten u. v. m. für deine Bands erstellen und verwalten.</p>
+    </div>
+    <div class="hero-social">
+      <div class="hs-title">Bei Problemen melde dich hier</div>
+      <div class="hs-links">
+        <a class="hs-link" href="https://www.instagram.com/housi_666/" target="_blank" rel="noopener" title="Instagram: housi_666"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg><span>housi_666</span></a>
+        <a class="hs-link" href="https://www.tiktok.com/@housi_666" target="_blank" rel="noopener" title="TikTok: housi_666"><svg viewBox="0 0 24 24"><path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5"/><path d="M14 3c.5 2.6 2.4 4.4 5 4.7"/></svg><span>housi_666</span></a>
+        <a class="hs-link" href="https://www.facebook.com/search/top?q=Housi%20Guntern" target="_blank" rel="noopener" title="Facebook: Housi Guntern"><svg viewBox="0 0 24 24"><path d="M14.5 21v-7.5H17l.5-3h-3V8.8c0-.9.3-1.5 1.6-1.5h1.5V4.6A20 20 0 0 0 15.3 4.5c-2.3 0-3.8 1.4-3.8 3.9v2.1H9v3h2.5V21"/></svg><span>Housi Guntern</span></a>
+      </div>
+      <div class="hs-note">Und wenn dir meine Arbeit gefällt, lass ein Follow da. 🤘</div>
+      <div class="hs-version">Stagemate <span data-app-version></span> · Pre-Alpha</div>
+    </div>
+  </section>
+
+  <section class="auth-side">
+    <div class="card">
+      <div class="tabs">
+        <button class="tab active" data-tab="login">Anmelden</button>
+        <button class="tab" data-tab="register">Registrieren</button>
+      </div>
+
+      <div id="loadingBox" class="loading"><div class="spinner"></div>Verbindung wird hergestellt …</div>
+      <div id="demoBanner" class="demo-banner hidden">Demo-Modus: Die Datenbank ist in dieser Ansicht nicht erreichbar. Alles wird nur in diesem Browser gespeichert.</div>
+
+      <!-- Anmelden -->
+      <div id="loginPane" class="hidden">
+        <div id="loginKnown" class="hidden">
+          <h2>Schön, dass du da bist</h2>
+          <p class="hint">Du bist bereits registriert.</p>
+          <div class="profile-box">
+            <div class="avatar" id="loginAvatar"></div>
+            <div>
+              <div class="pname" id="loginName"></div>
+              <div class="prole" id="loginBands"></div>
+            </div>
+          </div>
+          <button class="btn" id="loginBtn">Anmelden</button>
+          <div class="msg" id="loginMsg"></div>
+        </div>
+        <div id="loginUnknown" class="hidden">
+          <h2>Anmelden</h2>
+          <p class="hint">Für dein Konto gibt es noch kein Profil. Registriere dich zuerst – dabei gründest du eine Band oder trittst einer bei.</p>
+          <button class="btn" id="goRegister">Jetzt registrieren</button>
+        </div>
+      </div>
+
+      <!-- Registrieren / Profil -->
+      <div id="registerSlot"></div>
+
+      <p class="footnote" id="footnote">Die Anmeldung läuft über dein Claude-Konto – du brauchst kein separates Passwort.</p>
+    </div>
+  </section>
+</div>
+
+<!-- Formular (wird je nach Ort eingesetzt: Anmeldeseite oder „Profil & Bands" in der App) -->
+<form id="profileForm" novalidate>
+  <h2 id="regTitle">Registrieren</h2>
+  <p class="hint" id="regHint"></p>
+
+  <div class="photo-field">
+    <div class="avatar big" id="fPhotoPreview"></div>
+    <div class="photo-side">
+      <span class="flabel">Profilbild <small>(optional)</small></span>
+      <div class="photo-btns">
+        <label class="btn small ghost" for="fPhoto" id="fPhotoBtn">Bild hinzufügen</label>
+        <input type="file" id="fPhoto" accept="image/*" class="visually-hidden">
+        <button type="button" class="link-danger hidden" id="fPhotoDel">Bild löschen</button>
+      </div>
+      <div class="msg" id="photoMsg"></div>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="fName">Name</label>
+    <input id="fName" type="text" autocomplete="name" placeholder="Vor- und Nachname">
+  </div>
+  <div class="field">
+    <label for="fEmail">E-Mail <small>(optional)</small></label>
+    <input id="fEmail" type="email" autocomplete="email" placeholder="name@beispiel.ch">
+  </div>
+  <div class="field">
+    <label for="fPhone">Telefon <small>(optional)</small></label>
+    <input id="fPhone" type="tel" autocomplete="tel" placeholder="+41 …">
+  </div>
+
+  <div id="myBandsBlock" class="hidden">
+    <div class="section-title">Deine Bands</div>
+    <div id="myBands"></div>
+  </div>
+
+  <div id="addBandBlock">
+  <div class="section-title" id="newBandTitle">Deine Band</div>
+  <div class="seg" id="bandMode">
+    <button type="button" data-mode="join" class="on">Band beitreten</button>
+    <button type="button" data-mode="create">Neue Band gründen</button>
+    <button type="button" data-mode="none" id="noneModeBtn" class="hidden">Keine</button>
+  </div>
+  <div id="newBandFields">
+    <div class="field" id="joinField">
+      <label for="fCode">Einladungscode <small>(Band-Code oder persönlicher Code)</small></label>
+      <input id="fCode" class="code" type="text" maxlength="8" placeholder="ABC123" autocomplete="off">
+    </div>
+    <div class="found muted" id="joinFound">Gib den Code ein, um die Rollen der Band zu sehen.</div>
+    <div class="field hidden" id="createField">
+      <label for="fBandName">Name der Band</label>
+      <input id="fBandName" type="text" placeholder="z. B. Die Nachtfalter">
+    </div>
+    <div class="field" id="newRolesField">
+      <span class="flabel">Instrument / Rolle in dieser Band <small>(Mehrfachauswahl)</small></span>
+      <div class="chips" id="newRoles"></div>
+    </div>
+  </div>
+  </div>
+
+  <button class="btn" type="submit" id="regBtn">Registrieren</button>
+  <div class="msg" id="regMsg"></div>
+</form>
+
+<!-- ================= App ================= -->
+<div id="app" class="hidden">
+  <div class="side-backdrop" id="sideBackdrop" aria-hidden="true"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <span class="brand-logo" id="brandLogo"><span class="logo-slot"></span></span>
+      <div class="brand-text">
+        <div class="brand-name" id="brandName">Band</div>
+        <div class="brand-sub">Band-Verwaltung</div>
+      </div>
+    </div>
+    <div class="band-switch" id="bandSwitchWrap">
+      <select id="bandSwitch" aria-label="Band wechseln" class="hidden"></select>
+      <button type="button" class="band-toggle" id="bandToggle" aria-expanded="false">
+        <span>Bands</span><span class="bt-count" id="bandCount"></span>
+        <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="band-list" id="bandList"></div>
+    </div>
+
+    <nav id="nav">
+      <button class="nav-item" data-page="team">
+        <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 3-5.5 6.5-5.5s6.5 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.6c3 .2 5.5 1.9 5.5 5.4"/></svg>
+        <span class="label">Verwaltung</span>
+      </button>
+      <button class="nav-item active" data-page="overview">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <span class="label">Übersicht</span>
+      </button>
+      <button class="nav-item" data-page="page2">
+        <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+        <span class="label">Kalender</span>
+      </button>
+      <button class="nav-item" data-page="page3">
+        <svg viewBox="0 0 24 24"><path d="M2 2.5h20"/><path d="M3 2.5v12.5h4.5C5.5 12 5 8 6.5 2.5"/><path d="M21 2.5v12.5h-4.5c2-3 2.5-7 1-12.5"/><path d="M12 6l-2.5 9M12 6l2.5 9" stroke-dasharray="1.6 1.6"/><circle cx="12" cy="5" r="1.2"/><path d="M1.5 15h21M3 15v5h18v-5"/></svg>
+        <span class="label">Gigs</span>
+      </button>
+      <button class="nav-item" data-page="page4">
+        <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8.5l1.5 1.5 3-3M8 14.5l1.5 1.5 3-3M15 9h1.5M15 15h1.5"/></svg>
+        <span class="label">Checkliste</span>
+      </button>
+      <button class="nav-item" data-page="page5">
+        <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18"/><path d="M16.5 14.5h1.5"/><path d="M6 6l9.5-3 1.2 3"/></svg>
+        <span class="label">Finanzen</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="nav-item" id="tipsBtn" type="button" title="Tipps zu dieser Seite">
+        <svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.9V16h5v-.2c0-.8.4-1.5 1-1.9A6 6 0 0 0 12 3z"/></svg>
+        <span class="label">Tipps</span>
+      </button>
+      <button class="nav-item" id="supportBtn" type="button" title="Support &amp; Social Media">
+        <svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/><path d="M13 8v4.5"/><circle cx="13" cy="15.7" r="0.6" fill="currentColor"/></svg>
+        <span class="label">Support</span>
+      </button>
+      <button class="user-chip" data-page="profile" title="Profil &amp; Bands">
+        <div class="avatar" id="appAvatar"></div>
+        <div class="user-text">
+          <div class="u-name" id="appName"></div>
+          <div class="u-role" id="appRole">Profil und Bands</div>
+        </div>
+      </button>
+      <button class="nav-item" data-page="settings" title="Einstellungen">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        <span class="label">Einstellungen</span>
+      </button>
+      <button class="nav-item" id="logoutBtn" title="Abmelden">
+        <svg viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 16l-4-4 4-4"/><path d="M6 12h10"/></svg>
+        <span class="label">Abmelden</span>
+      </button>
+      <button class="nav-item toggle" id="toggle" title="Seitenleiste ein-/ausklappen">
+        <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+        <span class="label">Einklappen</span>
+      </button>
+      <div class="app-version" title="Versionsnummer von Stagemate"><span class="vtag" data-app-version></span><span class="vlabel"> · Pre-Alpha</span></div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topbar"><h1 id="pageTitle">Übersicht</h1><span class="badge hidden" id="roBadge">Nur lesen</span></header>
+    <div class="viewas-bar hidden" id="viewAsBar">
+      <svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span class="va-text">Du betrachtest die Seite aus der Rolle von <b id="vaRole"></b></span>
+      <label class="va-switch">Wechseln zu <select id="vaSwitch" aria-label="Mitglied wechseln"></select></label>
+      <button class="btn small" id="vaStop" type="button">Ansicht beenden</button>
+    </div>
+    <div class="preview-warn hidden" id="previewWarn" role="alert">
+      <span class="pw-ico">🔒</span>
+      <span id="previewWarnText">Gesperrt: In der Vorschau kannst du nichts ändern. Beende die Ansicht, um Änderungen vorzunehmen.</span>
+    </div>
+    <div class="unsaved-bar hidden" id="unsavedBar">
+      <span class="ub-text"><b>!</b> <span>Es gibt nicht gespeicherte Änderungen in <span id="ubWhere"></span>.</span></span>
+      <button class="btn small ghost" id="ubOpen" type="button">Anzeigen</button>
+      <button class="btn small ghost" id="ubDiscard" type="button">Verwerfen</button>
+      <button class="btn small" id="ubSave" type="button">Speichern</button>
+    </div>
+    <div class="flash hidden" id="flash"></div>
+    <section class="content">
+      <div id="page-overview">
+        <p class="welcome-line" id="welcomeLine"></p>
+        <div class="ov-toolbar">
+          <span style="flex:1"></span>
+          <span class="clp-sort-wrap">
+            <button type="button" class="clp-sort-btn" id="ovCustomize">⚙ Anpassen ▾</button>
+            <div class="clp-sort-menu ov-menu hidden" id="ovMenu"></div>
+          </span>
+        </div>
+        <div class="ov-widgets" id="ovWidgets"></div>
+      </div>
+      <div id="page-placeholder" class="hidden"><div class="empty">Hier entsteht der Inhalt.</div></div>
+      <div id="page-gigs" class="hidden">
+        <div class="gigs-wrap">
+          <div class="gigs-toolbar">
+            <div class="gig-count" id="gigCount"></div>
+            <span style="flex:1"></span>
+            <button type="button" class="linkish-btn" id="gigExpand">Alle aufklappen</button>
+            <button type="button" class="linkish-btn" id="gigCollapse">Alle zuklappen</button>
+            <button type="button" class="btn small" id="gigAdd">Gig erstellen</button>
+          </div>
+          <div class="gig-list" id="gigList"></div>
+        </div>
+      </div>
+      <div id="page-checklist" class="hidden">
+        <div class="gigs-wrap">
+          <div class="gigs-toolbar">
+            <div class="gig-count" id="clpCount"></div>
+            <span style="flex:1"></span>
+            <span class="clp-sort-wrap">
+              <button type="button" class="clp-sort-btn" id="clpSortInfo" title="Sortierung für diese Band ändern"></button>
+              <div class="clp-sort-menu hidden" id="clpSortMenu"></div>
+            </span>
+            <button type="button" class="linkish-btn" id="clpExpand">Alle aufklappen</button>
+            <button type="button" class="linkish-btn" id="clpCollapse">Alle zuklappen</button>
+            <button type="button" class="btn small" id="clpAdd">Checkliste erstellen</button>
+          </div>
+          <div class="gig-list" id="clpList"></div>
+        </div>
+      </div>
+      <div id="page-finance" class="hidden">
+        <div class="fin-wrap">
+          <div class="gigs-toolbar fin-toolbar">
+            <select id="finYear" class="fin-year" aria-label="Jahr"></select>
+            <span style="flex:1"></span>
+            <button type="button" class="linkish-btn" id="finExport">CSV exportieren</button>
+            <button type="button" class="btn small ghost fin-add-out" id="finAddOut">− Ausgabe</button>
+            <button type="button" class="btn small fin-add-in" id="finAddIn">+ Einnahme</button>
+          </div>
+          <div class="fin-sum" id="finSum"></div>
+          <div class="fin-cats" id="finCats"></div>
+          <div class="fin-list" id="finList"></div>
+        </div>
+      </div>
+      <div id="page-calendar" class="hidden">
+        <div class="cal-card">
+          <div class="cal-toolbar">
+            <div class="cal-nav">
+              <button type="button" class="cal-btn" id="calPrev" title="Zurück (Pfeiltaste links)">‹</button>
+              <button type="button" class="cal-btn today-btn" id="calToday" title="Heute (T)">Heute</button>
+              <button type="button" class="cal-btn" id="calNext" title="Weiter (Pfeiltaste rechts)">›</button>
+            </div>
+            <h2 class="cal-title" id="calTitle"></h2>
+            <button type="button" class="btn small" id="calAdd">+ Termin</button>
+            <div class="seg cal-views" id="calViews">
+              <span class="cv-ind" aria-hidden="true"></span>
+              <button type="button" data-view="day" title="Tag (D)">Tag</button>
+              <button type="button" data-view="week" title="Woche (W)">Woche</button>
+              <button type="button" data-view="month" title="Monat (M)">Monat</button>
+              <button type="button" data-view="year" title="Jahr (J)">Jahr</button>
+            </div>
+            <div class="cal-zoom" id="calZoom" title="Zoom (auch Shift + Mausrad oder zwei Finger)">
+              <button type="button" id="czOut" aria-label="Herauszoomen">−</button>
+              <span class="cz-val" id="czVal" title="Zoom zurücksetzen">100 %</span>
+              <button type="button" id="czIn" aria-label="Hineinzoomen">+</button>
+            </div>
+          </div>
+          <div class="cal-viewport"><div class="cal-body" id="calBody"></div></div>
+          <div class="cal-footer">
+            <div class="cal-footer-head">
+              <div><span class="cal-sel-k">Ausgewählt</span> <strong id="calSelLabel"></strong></div>
+              <button type="button" class="btn small ghost" id="calAddDay">+ Termin an diesem Tag</button>
+            </div>
+            <div class="day-list" id="calDayList"></div>
+          </div>
+        </div>
+      </div>
+      <div id="page-settings" class="hidden">
+        <div class="fold-tools" data-fold="settings">
+          <button type="button" class="linkish-btn" data-fold-all="open">Alle aufklappen</button>
+          <button type="button" class="linkish-btn" data-fold-all="close">Alle zuklappen</button>
+        </div>
+        <div class="admin-wrap">
+          <div class="panel">
+            <h3>Darstellung</h3>
+            <p class="hint">Wähle, wie die App aussehen soll. Die Wahl wird gleich angezeigt und gilt nach dem Speichern für diesen Browser.</p>
+            <div class="theme-options" id="themeOptions">
+              <button type="button" class="theme-opt" data-theme-opt="light">
+                <div class="prev light"><div class="ps"></div><div class="pm"><i></i><i></i><i></i></div></div>
+                <div class="tt">Hell</div><div class="td">Heller Hintergrund</div>
+              </button>
+              <button type="button" class="theme-opt" data-theme-opt="dark">
+                <div class="prev dark"><div class="ps"></div><div class="pm"><i></i><i></i><i></i></div></div>
+                <div class="tt">Dunkel</div><div class="td">Schont die Augen bei wenig Licht</div>
+              </button>
+              <button type="button" class="theme-opt" data-theme-opt="system">
+                <div class="prev system"><div class="ps"></div><div class="pm"></div></div>
+                <div class="tt">Automatisch</div><div class="td">Folgt der Einstellung deines Geräts</div>
+              </button>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Mauszeiger</h3>
+            <p class="hint">Wähle, wie der Mauszeiger aussieht. Die Wahl wird gleich angezeigt und gilt nach dem Speichern für diesen Browser. Auf Handy und Tablet ohne Maus hat sie keine Wirkung.</p>
+            <div class="cursor-options" id="cursorOptions"></div>
+          </div>
+          <div class="panel">
+            <h3>Uhr & Datum</h3>
+            <p class="hint">Wie Uhrzeit und Datum in der Übersicht angezeigt werden. Gilt nur für dich und wird in deinem Profil gespeichert.</p>
+            <div class="clock-settings" id="clockSettings"></div>
+          </div>
+          <div class="panel">
+            <h3>Kontaktangaben</h3>
+            <p class="hint">Lege pro Band fest, ob die Mitglieder deine E-Mail und Telefonnummer sehen. Die Angaben selbst änderst du unter „Profil und Bands“.</p>
+            <div class="share-settings" id="shareSettings"></div>
+          </div>
+          <div class="panel">
+            <h3>Checkliste sortieren</h3>
+            <p class="hint">Wie Checklisten, Reiter und Unterreiter für dich geordnet werden. Eine Wahl hier gilt für alle deine Bands. In der Registerkarte „Checkliste“ kannst du über „⇅“ für eine einzelne Band eine eigene Sortierung festlegen.</p>
+            <div class="sort-options" id="clSortOptions"></div>
+          </div>
+          <div class="admin-actions">
+            <button class="btn small" id="setSave" type="button">Änderungen speichern</button>
+            <div class="msg" id="setMsg"></div>
+          </div>
+        </div>
+      </div>
+      <div id="page-team" class="hidden">
+        <div class="fold-tools" data-fold="team">
+          <button type="button" class="linkish-btn" data-fold-all="open">Alle aufklappen</button>
+          <button type="button" class="linkish-btn" data-fold-all="close">Alle zuklappen</button>
+        </div>
+        <div class="admin-wrap">
+          <div class="panel hidden" id="viewAsPanel">
+            <h3>In eine Rolle schlüpfen</h3>
+            <p class="hint">Sieh dir die App so an, wie ein bestimmtes Mitglied sie sieht – inklusive ausgeblendeter und schreibgeschützter Register. Es wird dabei nichts verändert.</p>
+            <div class="inline-add">
+              <select id="vaPick" class="va-pick" aria-label="Mitglied auswählen"></select>
+              <button class="btn small" id="vaStart" type="button">Ansicht starten</button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3>Mitglieder</h3>
+            <p class="hint" id="tHint"></p>
+            <div class="note-info hidden" id="previewNote" style="margin:-8px 0 16px">ℹ Vorschau: So sieht dieses Mitglied die Rollenverwaltung. Änderungen sind in der Vorschau nicht möglich.</div>
+            <div class="invite-box">
+              <div>
+                <div class="k">Einladungscode der Band</div>
+                <div class="v"><span id="ovCode"></span><button class="copy-btn" id="copyCode" type="button">Kopieren</button></div>
+              </div>
+              <p class="mnote">Mit diesem Code können neue Mitglieder der Band bei der Registrierung beitreten.</p>
+            </div>
+            <div class="mlist-tools hidden" id="mlistTools">
+              <button type="button" class="linkish-btn" id="mExpandAll">Alle aufklappen</button>
+              <button type="button" class="linkish-btn" id="mCollapseAll">Alle zuklappen</button>
+            </div>
+            <div class="mlist" id="tMembers"></div>
+          </div>
+
+          <div class="panel" id="logoPanel">
+            <h3>Bandlogo</h3>
+            <p class="hint" id="logoHint"></p>
+            <div class="logo-edit">
+              <div class="logo-preview" id="logoPreview"></div>
+              <div class="logo-side" id="logoControls">
+                <label class="btn small ghost" for="logoFile" id="logoUpload">Logo hochladen</label>
+                <input type="file" id="logoFile" accept="image/*,.svg,image/svg+xml" class="visually-hidden">
+                <button type="button" class="link-danger" id="logoRemove">Logo entfernen</button>
+                <div class="mnote">PNG, JPG, WebP, GIF oder SVG (Vektor). Bilder werden auf max. 256 px verkleinert, SVG bleibt als Vektor erhalten.</div>
+                <div class="msg" id="logoMsg"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" id="teamAddPanel">
+            <h3>Mitglied hinzufügen</h3>
+            <p class="hint">Füge eine Person direkt zur Band hinzu. Sie erscheint sofort in der Liste und erhält nach dem Speichern einen persönlichen Code, mit dem sie sich registrieren kann – ihre Rollen werden dabei übernommen.</p>
+            <div class="field" style="max-width:420px">
+              <label for="addName">Name</label>
+              <input id="addName" type="text" placeholder="Vor- und Nachname" maxlength="60">
+            </div>
+            <div class="field">
+              <span class="flabel">Rollen</span>
+              <div class="chips" id="addRoles"></div>
+            </div>
+            <button class="btn small" id="addBtn" type="button">Hinzufügen</button>
+            <div class="msg" id="addMsg"></div>
+          </div>
+
+          <div id="teamAdminOnly" class="admin-wrap">
+            <div class="panel" id="bandNamePanel">
+              <h3>Band</h3>
+              <div class="field" style="max-width:420px; margin-bottom:0">
+                <label for="aBandName">Name der Band</label>
+                <input id="aBandName" type="text">
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Verfügbare Rollen</h3>
+              <p class="hint">Diese Rollen stehen in der Band zur Auswahl. Entfernte Rollen verschwinden bei allen Mitgliedern.</p>
+              <div class="role-edit" id="aRoles"></div>
+              <div class="inline-add">
+                <input id="aNewRole" type="text" placeholder="Neue Rolle, z. B. Saxofon" maxlength="40">
+                <button class="btn small" id="aAddRole" type="button">Hinzufügen</button>
+              </div>
+              <div class="rr-head">Rechte der Rollen</div>
+              <div class="role-rights" id="aRoleRights"></div>
+            </div>
+
+            <div class="panel" id="catPanel">
+              <h3>Termin-Kategorien</h3>
+              <p class="hint">Kategorien für Termine im Kalender. Lege Namen und Farben fest – die Farben erscheinen überall im Kalender.</p>
+              <div class="cat-list" id="aCats"></div>
+              <button class="btn small ghost" id="aAddCat" type="button">+ Kategorie hinzufügen</button>
+            </div>
+
+            <div class="admin-actions">
+              <button class="btn small" id="aSave" type="button">Änderungen speichern</button>
+              <div class="msg" id="aMsg"></div>
+            </div>
+          </div>
+          <div class="panel dissolve-panel hidden" id="dissolvePanel">
+            <h3>Band auflösen</h3>
+            <p class="hint">Die Band wird mit allen Terminen, Gigs und Dokumenten endgültig gelöscht. Das kann nicht rückgängig gemacht werden.</p>
+            <div class="dz-step" id="dzStep1"></div>
+            <div class="dz-step" id="dzStep2"></div>
+            <div class="dz-actions">
+              <button class="btn danger" id="dzBtn" type="button">Band auflösen</button>
+            </div>
+            <div class="dz-confirm hidden" id="dzConfirm">
+              <strong>Willst du die Band wirklich auflösen?</strong>
+              <div class="dz-confirm-btns">
+                <button class="btn danger" id="dzYes" type="button">Ja</button>
+                <button class="btn ghost" id="dzNo" type="button">Abbrechen</button>
+              </div>
+            </div>
+            <div class="msg" id="dzMsg"></div>
+            <p class="dz-support">Falls der Admin dieses Bandservers nicht erreichbar ist, kontaktiere den Support: <a href="https://www.instagram.com/housi_666/" target="_blank" rel="noopener">Instagram</a> · <a href="https://www.tiktok.com/@housi_666" target="_blank" rel="noopener">TikTok</a> (housi_666) · <a href="https://www.facebook.com/search/top?q=Housi%20Guntern" target="_blank" rel="noopener">Facebook</a> (Housi Guntern).</p>
+          </div>
+        </div>
+      </div>
+      <div id="page-profile" class="hidden"><div class="card" id="profileSlot"></div></div>
+    </section>
+  </main>
+</div>
+
+<!-- Tipps -->
+<div class="modal-bg hidden" id="supportModal">
+  <div class="modal support-modal" role="dialog" aria-modal="true" aria-labelledby="supportTitle">
+    <div class="modal-head">
+      <h3 id="supportTitle">Support &amp; Social Media</h3>
+      <button type="button" class="modal-x" id="supportClose" aria-label="Schliessen">×</button>
+    </div>
+    <p class="support-text">Fragen, Probleme oder Ideen zu Stagemate? Schreib mir über einen dieser Kanäle – das ist gleichzeitig der Support-Kontakt.</p>
+    <div class="hs-links support-links">
+        <a class="hs-link" href="https://www.instagram.com/housi_666/" target="_blank" rel="noopener" title="Instagram: housi_666"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg><span><b class="sl-p">Instagram</b> housi_666</span></a>
+        <a class="hs-link" href="https://www.tiktok.com/@housi_666" target="_blank" rel="noopener" title="TikTok: housi_666"><svg viewBox="0 0 24 24"><path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5"/><path d="M14 3c.5 2.6 2.4 4.4 5 4.7"/></svg><span><b class="sl-p">TikTok</b> housi_666</span></a>
+        <a class="hs-link" href="https://www.facebook.com/search/top?q=Housi%20Guntern" target="_blank" rel="noopener" title="Facebook: Housi Guntern"><svg viewBox="0 0 24 24"><path d="M14.5 21v-7.5H17l.5-3h-3V8.8c0-.9.3-1.5 1.6-1.5h1.5V4.6A20 20 0 0 0 15.3 4.5c-2.3 0-3.8 1.4-3.8 3.9v2.1H9v3h2.5V21"/></svg><span><b class="sl-p">Facebook</b> Housi Guntern</span></a>
+      </div>
+  </div>
+</div>
+<div class="modal-bg hidden" id="finModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="finTitleH">
+    <div class="modal-head">
+      <h3 id="finTitleH">Eintrag</h3>
+      <button type="button" class="modal-x" id="finClose" aria-label="Schliessen">×</button>
+    </div>
+    <div class="seg fin-type" id="finType">
+      <button type="button" data-t="in">+ Einnahme</button>
+      <button type="button" data-t="out">− Ausgabe</button>
+    </div>
+    <div class="field"><label for="finAmount">Betrag (CHF)</label><input id="finAmount" type="number" inputmode="decimal" min="0" step="0.05" placeholder="0.00"></div>
+    <div class="ev-grid">
+      <div class="field"><label for="finDate">Datum</label><input id="finDate" type="date"></div>
+      <div class="field"><label for="finTime">Zeit <small>(optional)</small></label><input id="finTime" type="time"></div>
+    </div>
+    <div class="field"><label for="finTitle">Bezeichnung</label><input id="finTitle" type="text" maxlength="80" placeholder="z. B. Gage Stadtfest"></div>
+    <div class="ev-grid">
+      <div class="field"><label for="finCat">Kategorie</label><select id="finCat"></select></div>
+      <div class="field"><label for="finGig">Gig <small>(optional)</small></label><select id="finGig"></select></div>
+    </div>
+    <div class="field"><label for="finNote">Notiz <small>(optional)</small></label><textarea id="finNote" rows="2" maxlength="400" placeholder="z. B. bezahlt via TWINT, Quittung im Ordner"></textarea></div>
+    <div class="msg" id="finMsg"></div>
+    <div class="modal-actions">
+      <button type="button" class="link-danger" id="finDel">Löschen</button>
+      <span style="flex:1"></span>
+      <button type="button" class="btn small ghost" id="finCancel">Abbrechen</button>
+      <button type="button" class="btn small" id="finSave">Speichern</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg hidden" id="tipsModal">
+  <div class="modal tips-modal" role="dialog" aria-modal="true" aria-labelledby="tipsTitle">
+    <div class="modal-head">
+      <h3 id="tipsTitle">Tipps</h3>
+      <button type="button" class="modal-x" id="tipsClose" aria-label="Schliessen">×</button>
+    </div>
+    <div id="tipsBody"></div>
+  </div>
+</div>
+
+<!-- Termin-Dialog -->
+<div class="modal-bg hidden" id="alphaModal">
+  <div class="modal alpha-modal" role="dialog" aria-modal="true" aria-labelledby="alphaTitle">
+    <div class="alpha-ic">🚧</div>
+    <h3 id="alphaTitle">Pre-Alpha-Version</h3>
+    <p>Stagemate ist eine <strong>frühe Pre-Alpha-Version</strong>. Sie wird laufend weiterentwickelt und kann sich noch <strong>stark verändern</strong> – Funktionen, Aussehen und gespeicherte Daten inklusive.</p>
+    <p>Bitte rechne damit, dass nicht alles fehlerfrei läuft, und verlass dich für wichtige Termine noch nicht allein darauf.</p>
+    <p class="alpha-fun">Dr Blüemlifigger hets Claude (nid dr Schlumpf) Abo glöst. 🤣</p>
+    <div class="modal-actions"><span style="flex:1"></span><button type="button" class="btn small" id="alphaOk">Verstanden</button></div>
+  </div>
+</div>
+<div class="modal-bg hidden" id="clNewModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="clnTitle">
+    <div class="modal-head">
+      <h3 id="clnTitle">Checkliste erstellen</h3>
+      <button type="button" class="modal-x" id="clnClose" aria-label="Schliessen">×</button>
+    </div>
+    <div class="cln-opts" id="clnOpts"></div>
+    <div class="cln-pane" id="clnPane"></div>
+    <div class="msg" id="clnMsg"></div>
+    <div class="modal-actions">
+      <button type="button" class="link-danger" id="clnDel">Löschen</button>
+      <span style="flex:1"></span>
+      <button type="button" class="btn small ghost" id="clnCancel">Abbrechen</button>
+      <button type="button" class="btn small" id="clnGo">Weiter</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg hidden" id="evModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="evModalTitle">
+    <div class="modal-head">
+      <h3 id="evModalTitle">Neuer Termin</h3>
+      <button type="button" class="modal-x" id="evClose" aria-label="Schliessen">×</button>
+    </div>
+    <div class="note-info hidden" id="evReadonly">Du kannst diesen Termin nur ansehen.</div>
+    <div class="field"><label for="evTitle">Titel</label><input id="evTitle" type="text" maxlength="80" placeholder="z. B. Bandprobe"></div>
+    <div class="field">
+      <label for="evCat">Kategorie</label>
+      <div class="cat-select"><span class="cat-dot" id="evCatDot"></span><select id="evCat"></select></div>
+      <div class="mnote hidden" id="evCatLock" style="margin-top:6px">🔒 Hier können nur Gigs erstellt werden.</div>
+    </div>
+    <div class="ev-grid">
+      <div class="field"><label for="evDate">Datum</label><input id="evDate" type="date"></div>
+      <label class="share-row ev-allday"><span class="switch"><input type="checkbox" id="evAllDay"><span></span></span><span>Ganztägig</span></label>
+    </div>
+    <label class="ev-cl-toggle" id="evClWrap"><input type="checkbox" id="evChecklist"><span class="ev-cl-box">✓</span><span class="ev-cl-text"><strong>Checkliste</strong><small>Schaltet eine Checkliste für diesen Termin frei (Registerkarte „Checkliste“).</small></span></label>
+    <details class="ev-sec" id="secTime" open>
+      <summary><span id="secTimeTitle">Zeit</span><span class="sec-sum" id="secTimeSum"></span></summary>
+      <div class="ev-grid ev-grid-4 hidden" id="evSchedule">
+        <div class="field"><label for="evGetIn">Get In</label><input id="evGetIn" type="time"></div>
+        <div class="field"><label for="evAufbau">Aufbau</label><input id="evAufbau" type="time"></div>
+        <div class="field"><label for="evSoundcheck">Soundcheck</label><input id="evSoundcheck" type="time"></div>
+        <div class="field"><label for="evLinecheck">Linecheck</label><input id="evLinecheck" type="time"></div>
+      </div>
+      <div class="ev-grid" id="evTimes">
+        <div class="field"><label for="evStart" id="evStartLabel">Von</label><input id="evStart" type="time"></div>
+        <div class="field"><label for="evEnd" id="evEndLabel">Bis</label><input id="evEnd" type="time"></div>
+      </div>
+    </details>
+    <details class="ev-sec" id="secPlace" open>
+      <summary><span id="secPlaceTitle">Ort</span><span class="sec-sum" id="secPlaceSum"></span></summary>
+      <div class="field"><label for="evLocation" id="evLocationLabel">Ort <small>(optional)</small></label><input id="evLocation" type="text" maxlength="100" placeholder="z. B. Proberaum"></div>
+      <div id="evGigFields" class="hidden">
+        <div class="field"><label for="evAddress">Adresse <small>(optional)</small></label><textarea id="evAddress" rows="2" maxlength="300" placeholder="Strasse Nr.&#10;PLZ Ort"></textarea></div>
+        <div class="field"><label for="evParking">Parkieren <small>(optional)</small></label><textarea id="evParking" rows="2" maxlength="500" placeholder="z. B. Hintereingang, 2 Plätze reserviert, Ausladen ab 16 Uhr"></textarea></div>
+        <div class="field"><label for="evMaps">Google-Maps-Link <small>(optional – sonst wird er aus Location und Adresse erstellt)</small></label><input id="evMaps" type="url" maxlength="500" placeholder="https://maps.app.goo.gl/…"></div>
+      </div>
+    </details>
+    <details class="ev-sec gig-only hidden" id="secCatering">
+      <summary><span>Verpflegung</span><span class="sec-sum" id="secCateringSum"></span></summary>
+      <div class="field"><label for="evCatering" class="visually-hidden">Verpflegung</label><textarea id="evCatering" rows="3" maxlength="800" placeholder="z. B. Nachtessen 18:30 im Backstage, Getränke frei, 1 Vegi-Menü"></textarea></div>
+    </details>
+    <details class="ev-sec gig-only hidden" id="secContact">
+      <summary><span>Kontakt</span><span class="sec-sum" id="secContactSum"></span></summary>
+      <div class="contact-list" id="evContacts"></div>
+      <button type="button" class="btn small ghost" id="evAddContact">+ Kontakt hinzufügen</button>
+    </details>
+    <details class="ev-sec gig-only hidden" id="secLinks">
+      <summary><span>Links</span><span class="sec-sum" id="secLinksSum"></span></summary>
+      <div class="link-list" id="evLinks"></div>
+      <button type="button" class="btn small ghost" id="evAddLink">+ Link hinzufügen</button>
+    </details>
+    <details class="ev-sec gig-only hidden" id="secDocs">
+      <summary><span>Dokumente</span><span class="sec-sum" id="secDocsSum"></span></summary>
+      <div class="doc-list" id="evDocs"></div>
+      <label class="btn small ghost doc-add" id="evDocAdd" for="evDocFile">+ Dokument hinzufügen</label>
+      <input type="file" id="evDocFile" class="visually-hidden" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.svg,.txt,.csv,.md,.json,.mp4,.webm,application/pdf,image/*,text/plain,text/csv,text/markdown,application/json,video/mp4,video/webm">
+      <div class="mnote doc-hint">PDF, Bilder, Text, CSV, Markdown, JSON oder Video – max. 20 MB pro Datei. Word/Excel bitte als PDF speichern.</div>
+      <div class="msg" id="evDocMsg"></div>
+    </details>
+    <details class="ev-sec" id="secNotes">
+      <summary><span>Notizen</span><span class="sec-sum" id="secNotesSum"></span></summary>
+      <div class="field"><label for="evNotes" class="visually-hidden">Notizen</label><textarea id="evNotes" rows="3" maxlength="1000"></textarea></div>
+    </details>
+    <details class="ev-sec" id="secRepeat">
+      <summary><span>Wiederholen</span><span class="sec-sum" id="secRepeatSum"></span></summary>
+    <div class="ev-repeat">
+      <div class="field">
+        <label for="evFreq">Wiederholen</label>
+        <select id="evFreq">
+          <option value="none">Nie</option>
+          <option value="daily">Täglich</option>
+          <option value="weekly">Wöchentlich</option>
+          <option value="monthly">Monatlich</option>
+          <option value="yearly">Jährlich</option>
+        </select>
+      </div>
+      <div id="evRepeatOpts" class="hidden">
+        <div class="ev-inline">Alle <input id="evInterval" type="number" min="1" max="99" value="1" class="ev-num"> <span id="evUnit">Woche</span></div>
+        <div id="evWeekdaysRow" class="ev-inline"><span>am</span><div class="wd-chips" id="evWeekdays"></div></div>
+        <div class="ev-end">
+          <span class="flabel">Endet</span>
+          <label><input type="radio" name="evEnd" value="never" checked> Nie</label>
+          <label><input type="radio" name="evEnd" value="until"> Am <input id="evUntil" type="date"></label>
+          <label><input type="radio" name="evEnd" value="count"> Nach <input id="evCount" type="number" min="1" max="999" value="10" class="ev-num"> Terminen</label>
+        </div>
+        <div class="ev-summary" id="evRepeatSummary"></div>
+      </div>
+    </div>
+    </details>
+    <div class="mnote" id="evOccInfo"></div>
+    <div class="msg" id="evMsg"></div>
+    <div class="remove-line hidden" id="evDelConfirm">
+      <span class="mnote">Termin löschen?</span>
+      <button type="button" class="btn small danger" id="evDelOne">Nur diesen Termin</button>
+      <button type="button" class="btn small danger" id="evDelAll">Ja, löschen</button>
+      <button type="button" class="btn small ghost" id="evDelNo">Abbrechen</button>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="link-danger" id="evDelete">Löschen</button>
+      <span style="flex:1"></span>
+      <button type="button" class="btn small ghost" id="evCancel">Schliessen</button>
+      <button type="button" class="btn small" id="evSave">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/version.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
