@@ -1,16 +1,23 @@
-/*! Stagemate v0.2.1 · Build 14 · 2026-11-16 */
+/*! Stagemate v0.3.0 · Build 15 · 2026-11-16 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.2.1';
-const APP_BUILD = 14;
+const APP_VERSION = 'v0.3.0';
+const APP_BUILD = 15;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.3.0', date: '2026-11-16', items: [
+    { type: 'neu', text: 'Nach der Anmeldung immer zuerst der persönliche Startbildschirm, erst dann die Bandseite' },
+    { type: 'neu', text: 'Online-Status „Privat“ (blau), solange du auf dem Startbildschirm bist' },
+    { type: 'besser', text: 'Unten links „Zurück zum Startbildschirm“ statt „Abmelden“; Abmelden jetzt oben rechts auf dem Startbildschirm' },
+    { type: 'neu', text: 'Entwickler-Zugang (Knopf unten rechts): Band- und Benutzerverwaltung mit Einsicht in alle Daten' },
+    { type: 'neu', text: 'Handy: Seitenleiste in drei Stufen – offen, nur Symbole, ganz weg (Pfeil am Rand)' },
+  ] },
   { version: 'v0.2.1', date: '2026-11-16', items: [
     { type: 'fix', text: 'Registerkarten sind auch auf dem Startbildschirm sichtbar (öffnen die zuletzt geöffnete Band)' },
     { type: 'neu', text: 'Registerkarten in der Seitenleiste auf- und zuklappbar' },

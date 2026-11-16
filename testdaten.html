@@ -25,10 +25,13 @@
   <b>5 Bands</b> (<code>TBA-01</code> … <code>TBA-05</code>), <b>7 Gigs</b> mit allen Angaben (je 4 Bands pro Gig) und pro Band und Gig eine Checkliste.</p>
   <div class="box">
     <div>Passwort aller Testkonten: <code id="pw"></code></div>
-    <p style="margin:10px 0 0">Läuft in einem eigenen Hintergrund-Zugang – dein eigenes Konto bleibt angemeldet. Dauer: etwa 1–2 Minuten.
+    <p style="margin:10px 0 0">Läuft in einem eigenen Hintergrund-Zugang – dein eigenes Konto bleibt angemeldet. Damit du Admin von TBA-01 wirst, musst du in Stagemate (im gleichen Browser) mit deinem Konto angemeldet sein. Dauer: etwa 1–2 Minuten.
     <b>Nach dem Erstellen diese Datei wieder von GitHub löschen</b>, damit niemand sonst sie ausführt.</p>
+    <div id="meBox" style="margin-top:12px; padding:10px 12px; border-radius:10px; background:#0b0c10; border:1px solid #2c2e38">Prüfe dein Konto …</div>
+    <label style="display:flex; gap:8px; align-items:center; margin-top:10px; color:#c9cbd6"><input type="checkbox" id="meAdmin" checked> Mich als <b>Admin (Gründer)</b> von <b>TBA-01</b> eintragen</label>
     <div style="margin-top:14px">
       <button class="go" id="go">Testdaten erstellen</button>
+      <button class="go" id="meOnly" style="background:#3b82f6;color:#fff">Nur mich als Admin von TBA-01 eintragen</button>
       <button class="del" id="del">Testdaten löschen</button>
     </div>
     <div class="bar"><div id="bar"></div></div>
@@ -54,6 +57,15 @@
   const log = (t, cls) => { const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = t; logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight; };
   const bar = p => { $('bar').style.width = Math.round(p * 100) + '%'; };
   if (!window.STAGEMATE_FIREBASE || !window.firebase) { log('Firebase konnte nicht geladen werden (firebase-config.js im selben Ordner?).', 'err'); return; }
+  // Hauptzugang = dein in Stagemate angemeldetes Konto (gleiche Adresse, gleiche Anmeldung)
+  const main = firebase.apps.length ? firebase.app() : firebase.initializeApp(window.STAGEMATE_FIREBASE);
+  const MA = main.auth(), MF = main.firestore();
+  let me = null;
+  MA.onAuthStateChanged(u => {
+    me = u && !/@stagemate\.test$/.test(u.email || '') ? u : null;
+    $('meBox').innerHTML = me ? `✅ Angemeldet als <b>${me.email}</b> – wird Admin von TBA-01.` : '⚠️ Nicht angemeldet: Melde dich zuerst in Stagemate (gleicher Browser) mit deinem eigenen Konto an und lade diese Seite neu. Ohne Anmeldung werden nur die Testdaten erstellt.';
+  });
+  // Hintergrund-Zugang für die Testkonten
   const app = firebase.initializeApp(window.STAGEMATE_FIREBASE, 'stagemate-testdaten');
   const A = app.auth(), F = app.firestore();
   const now = () => new Date().toISOString();
@@ -173,7 +185,42 @@
       log(`  ✓ TBA-${pad(b)}: ${[...Array(N_GIGS)].map((_, k) => k + 1).filter(g => gigBands(g).includes(b)).length} Gigs`); step();
     }
     await A.signOut();
+    if ($('meAdmin').checked && me) await makeMeAdmin();
+    else if ($('meAdmin').checked) log('Hinweis: Du warst nicht angemeldet – später mit „Nur mich als Admin von TBA-01 eintragen“ nachholen.', 'err');
     log('Fertig! Melde dich z.B. mit ' + email(1) + ' und dem Passwort oben an.', 'ok');
+  }
+
+  // Dich als Admin (Gründer) von TBA-01 eintragen
+  async function makeMeAdmin() {
+    if (!me) throw new Error('Nicht angemeldet – melde dich zuerst in Stagemate mit deinem Konto an und lade diese Seite neu.');
+    const B = bandId(1);
+    log('Trage ' + me.email + ' als Admin von TBA-01 ein …');
+    const mref = MF.doc('members/' + me.uid), ms = await mref.get();
+    if (!ms.exists) throw new Error('Dein Profil fehlt – registriere dich zuerst in Stagemate.');
+    const d = ms.data();
+    const bandIds = [...new Set([...(d.bandIds || []), B])];
+    await mref.set({ ...d, bandIds, memberships: { ...(d.memberships || {}), [B]: { roles: ['Gründer', 'Organisation'], joinedAt: now(), share: { email: true, phone: true } } }, lastBand: B, updatedAt: now() });
+    const bref = MF.doc('bands/' + B), bs = await bref.get();
+    if (!bs.exists) throw new Error('TBA-01 gibt es noch nicht – zuerst die Testdaten erstellen.');
+    const band = bs.data(), old = band.createdBy;
+    const oc = old ? await MF.doc(`bandadmin/${old}/bands/${B}`).get() : null;
+    const cfg = oc && oc.exists ? oc.data() : { roles: DEFAULT_ROLES, access: { defaults: {}, members: {} }, extra: {}, removed: {}, admins: [] };
+    const assignments = { ...(cfg.assignments || {}) };
+    if (old && assignments[old]) assignments[old] = assignments[old].filter(r => r !== 'Gründer');
+    assignments[me.uid] = ['Gründer', 'Organisation'];
+    await MF.doc(`bandadmin/${me.uid}/bands/${B}`).set({ ...cfg, assignments, updatedAt: now(), rolesAt: now() });
+    await bref.set({ ...band, createdBy: me.uid, previousAdmin: old || null });
+    log('  ✓ Du bist jetzt Admin (Gründer) von TBA-01. Lade Stagemate neu (Ctrl + F5).', 'ok');
+  }
+  async function removeMe() {
+    if (!me) return;
+    const B = bandId(1);
+    try {
+      const mref = MF.doc('members/' + me.uid), ms = await mref.get();
+      if (ms.exists) { const d = ms.data(); const memberships = { ...(d.memberships || {}) }; delete memberships[B]; await mref.set({ ...d, bandIds: (d.bandIds || []).filter(x => x !== B), memberships, lastBand: d.lastBand === B ? null : d.lastBand }); }
+      await MF.doc(`bandadmin/${me.uid}/bands/${B}`).delete();
+      log('  ✓ Dein Konto aus TBA-01 entfernt', 'ok');
+    } catch (e) { log('  – Dein Konto: ' + (e.code || e.message), 'err'); }
   }
 
   async function remove() {
@@ -200,15 +247,17 @@
       } catch (e) { log(`  – ${nick(i)}: ${e.code || e.message}`, 'err'); }
       step();
     }
+    await removeMe();
     log('Testdaten gelöscht.', 'ok');
   }
 
   const run = async fn => {
-    $('go').disabled = $('del').disabled = true; bar(0);
+    $('go').disabled = $('del').disabled = $('meOnly').disabled = true; bar(0);
     try { await fn(); } catch (e) { log('Fehler: ' + (e.code || e.message), 'err'); }
-    finally { $('go').disabled = $('del').disabled = false; }
+    finally { $('go').disabled = $('del').disabled = $('meOnly').disabled = false; }
   };
   $('go').addEventListener('click', () => { if (confirm('30 Testkonten, 5 Bands und 7 Gigs erstellen?')) run(create); });
+  $('meOnly').addEventListener('click', () => run(makeMeAdmin));
   $('del').addEventListener('click', () => { if (confirm('Alle Testdaten und Testkonten löschen?')) run(remove); });
 })();
 </script>

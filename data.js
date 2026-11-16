@@ -1,4 +1,4 @@
-/*! Stagemate v0.2.1 · Build 14 · 2026-11-16 */
+/*! Stagemate v0.3.0 · Build 15 · 2026-11-16 */
 /* Stagemate – Datenschicht
  * ------------------------------------------------------------
  * Die einzige Stelle, die weiss, WO die Daten liegen.
@@ -248,6 +248,23 @@
     return 'browser';
   }
 
+  // ================= Entwickler-Zugang (nur Web-Version) =================
+  // Eigene, getrennte Firebase-Sitzung ("dev"), damit das normale Konto angemeldet bleibt.
+  // Freigegeben ist nur, wer in Firestore unter developers/<uid> eingetragen ist (Regeln prüfen das).
+  let devApp = null;
+  async function devSignIn(email, password) {
+    if (state.backend !== 'firebase') return { ok: false, error: 'Nur in der Web-Version verfügbar.' };
+    try {
+      devApp = firebase.apps.find(a => a.name === 'dev') || firebase.initializeApp(fbConfig(), 'dev');
+      const cred = await devApp.auth().signInWithEmailAndPassword(email, password);
+      const fs = devApp.firestore();
+      const ok = await fs.doc('developers/' + cred.user.uid).get().catch(() => null);
+      if (!ok || !ok.exists) { await devApp.auth().signOut().catch(() => {}); return { ok: false, error: 'Dieses Konto ist nicht als Entwickler freigegeben.', uid: cred.user.uid }; }
+      return { ok: true, db: makeFirebaseDb(fs), uid: cred.user.uid };
+    } catch (e) { return { ok: false, error: fbError(e), code: e && e.code }; }
+  }
+  async function devSignOut() { if (devApp) { try { await devApp.auth().signOut(); } catch (e) {} } }
+
   window.StagemateData = Object.freeze({
     connect,
     useLocal,
@@ -262,6 +279,7 @@
     get email() { return state.email; },
     get usesFirebase() { return !!fbConfig(); },
     signIn, signUp, resetPassword, signOut, reauthenticate, changePassword, deleteAccount,
+    devSignIn, devSignOut,
     get readOnly() { return state.readOnly; },
   });
 })();

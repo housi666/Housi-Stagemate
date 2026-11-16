@@ -1,4 +1,4 @@
-/*! Stagemate v0.2.1 · Build 14 · 2026-11-16 */
+/*! Stagemate v0.3.0 · Build 15 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -42,7 +42,7 @@
   //   bands/<bandId>                        Verzeichnis: { name, code, createdBy, createdAt }
   //   bandadmin/<adminUid>/bands/<bandId>   Admin-Einstellungen: { roles:[...], access:{ defaults:{reg:level}, members:{uid:{reg:level}} } }
   //                                         -> nur der Admin selbst (und der App-Besitzer) kann hier schreiben
-  let db = null, uid = null, mode = 'loading';
+  let db = null, uid = null, mode = 'loading', rawDb = null;
 
   // Datenzugriff läuft ausschliesslich über die Datenschicht (js/data.js)
   const Data = window.StagemateData;
@@ -745,8 +745,9 @@
       setMsg(msg, text, 'ok');
 
       if (isNew || added || acceptTerms || !$('app').classList.contains('hidden')) {
+        const fromAuth = $('app').classList.contains('hidden');
         setTimeout(() => {
-          enterApp(added ? added.id : currentBand);
+          if (fromAuth) enterHub(); else enterApp(added ? added.id : currentBand);
           if (!isNew) { prepareForm(); setMsg($('regMsg'), text, 'ok'); flash('Profil gespeichert ✓'); }
         }, isNew ? 900 : 0);
       } else {
@@ -1266,10 +1267,11 @@
   async function beat(state = 'online') {
     if (!db || !uid || readOnly || !profile) return;
     lastBeat = Date.now();
-    try { await db.doc('presence/' + uid).set({ online: state === 'online', since: presSince, lastSeen: Date.now() }); } catch (e) {}
+    try { await db.doc('presence/' + uid).set({ online: state === 'online', private: state === 'online' && inHub, since: presSince, lastSeen: Date.now() }); } catch (e) {}
   }
   function startPresence() {
     if (!presTimer) { presSince = Date.now(); beat(); presTimer = setInterval(() => { if (!document.hidden) { beat(); refreshOnline(); } }, 60000); }
+    else beat();   // Wechsel Startbildschirm <-> Band sofort melden (Privat / Online)
     refreshOnline();
   }
   function stopPresence() { if (presTimer) { clearInterval(presTimer); presTimer = null; beat('offline'); } }
@@ -1280,6 +1282,7 @@
   });
   window.addEventListener('pagehide', () => { if (presTimer) beat('offline'); });
   const isOnline = p => !!p && p.online && Date.now() - (p.lastSeen || 0) < PRES_TTL;
+  const isPrivate = p => isOnline(p) && !!p.private;   // online, aber auf dem persönlichen Startbildschirm
   async function refreshOnline(force) {
     if (!currentBand || inHub || !bands[currentBand]) return renderOnline();
     const bid = currentBand;
@@ -1289,15 +1292,19 @@
         bandMembersCache[bid] = q.docs.map(d => ({ uid: d.id, ...d.data() })).filter(m => isActiveIn(m, bid, bands[bid].cfg));
       }
       await Promise.all(bandMembersCache[bid].map(async m => {
-        if (m.uid === uid) { presCache[uid] = { online: true, since: presSince, lastSeen: Date.now() }; return; }
+        if (m.uid === uid) { presCache[uid] = { online: true, private: inHub, since: presSince, lastSeen: Date.now() }; return; }
         try { const s = await db.doc('presence/' + m.uid).get(); presCache[m.uid] = s.exists ? s.data() : null; } catch (e) {}
       }));
     } catch (e) {}
     renderOnline();
   }
   function renderOnline() {
+    const ob = $('onlineBtn');
+    ob.classList.toggle('is-private', inHub);
+    if (inHub) { $('onlineTxt').textContent = 'Privat'; ob.title = 'Du bist auf deinem persönlichen Startbildschirm – deine Bands sehen dich als „Privat“.'; ob.classList.remove('has-on'); return; }
+    ob.title = 'Mitglieder online – zur Übersicht';
     const ms = (currentBand && bandMembersCache[currentBand]) || [];
-    const on = ms.filter(m => isOnline(presCache[m.uid])).length;
+    const on = ms.filter(m => isOnline(presCache[m.uid]) && !isPrivate(presCache[m.uid])).length;
     $('onlineTxt').textContent = ms.length ? `${on} / ${ms.length} online` : '– online';
     $('onlineBtn').classList.toggle('has-on', on > 0);
     if (currentPage === 'overview') renderOvMembers();
@@ -1326,9 +1333,11 @@
       else if (ovmSort === 'time') r = tOf(a) - tOf(b);
       return (r || (a.name || '').localeCompare(b.name || '', 'de', { sensitivity: 'base' })) * dir;
     };
-    const groups = [['Online', ms.filter(m => isOnline(presCache[m.uid]))], ['Offline', ms.filter(m => !isOnline(presCache[m.uid]))]];
+    const pOf = m => presCache[m.uid];
+    const groups = [['Online', ms.filter(m => isOnline(pOf(m)) && !isPrivate(pOf(m)))], ['Privat', ms.filter(m => isPrivate(pOf(m)))], ['Offline', ms.filter(m => !isOnline(pOf(m)))]];
     groups.forEach(([title, list]) => {
-      box.append(el('div', 'ovm-group' + (title === 'Online' ? ' on' : ''), `${title} · ${list.length}`));
+      if (title === 'Privat' && !list.length) return;
+      box.append(el('div', 'ovm-group' + (title === 'Online' ? ' on' : title === 'Privat' ? ' priv' : ''), `${title} · ${list.length}`));
       if (!list.length) box.append(el('div', 'mnote', title === 'Online' ? 'Gerade ist niemand online.' : 'Alle sind online.'));
       list.sort(cmp).forEach(m => {
         const row = el('div', 'ovm-row');
@@ -1340,8 +1349,8 @@
         if (m.uid === uid) nm.append(el('span', 'ovm-me', 'Du'));
         const roles = memberRoles(m, currentBand);
         tx.append(nm, el('div', 'ovm-roles', roles.length ? roles.join(' · ') : 'Keine Rolle'));
-        const p = presCache[m.uid], on = isOnline(p);
-        const st = el('div', 'ovm-st' + (on ? ' on' : ''), on ? `● online seit ${whenText(p.since)}` : (p && p.lastSeen ? `zuletzt online: ${whenText(p.lastSeen)}` : 'noch nie online'));
+        const p = presCache[m.uid], on = isOnline(p), pv = isPrivate(p);
+        const st = el('div', 'ovm-st' + (pv ? ' priv' : on ? ' on' : ''), pv ? `● Privat seit ${whenText(p.since)}` : on ? `● online seit ${whenText(p.since)}` : (p && p.lastSeen ? `zuletzt online: ${whenText(p.lastSeen)}` : 'noch nie online'));
         row.append(av, tx, st); box.append(row);
       });
     });
@@ -5480,21 +5489,44 @@
   // ein Tippen daneben klappt sie wieder ein.
   const mobileMq = window.matchMedia ? matchMedia('(max-width: 760px)') : { matches: false };
   const isMobile = () => !!mobileMq.matches;
-  function syncSidebar() { $('app').classList.toggle('side-open', isMobile() && !sidebar.classList.contains('collapsed')); }
+  // Handy: drei Stufen – 'open' (offen), 'icons' (nur Symbole), 'hidden' (ganz weg, nur ein Pfeil am Rand)
+  function syncSidebar() {
+    const mob = isMobile();
+    if (!mob) $('app').classList.remove('side-hidden');
+    $('app').classList.toggle('side-open', mob && !sidebar.classList.contains('collapsed'));
+    const t = $('toggle'), lbl = t.querySelector('.label');
+    const txt = mob && sidebar.classList.contains('collapsed') ? 'Ganz ausblenden' : 'Einklappen';
+    if (lbl) lbl.textContent = txt;
+    t.title = mob && sidebar.classList.contains('collapsed') ? 'Seitenleiste ganz ausblenden (Pfeil am linken Rand holt sie zurück)' : 'Seitenleiste ein-/ausklappen';
+  }
+  const mobState = () => $('app').classList.contains('side-hidden') ? 'hidden' : sidebar.classList.contains('collapsed') ? 'icons' : 'open';
+  function setMobState(st) {
+    sidebar.classList.toggle('collapsed', st !== 'open');
+    $('app').classList.toggle('side-hidden', st === 'hidden');
+    if (st !== 'open') $('bandSwitchWrap').classList.remove('open');
+    ls.set('sideMobile', st === 'hidden' ? 'hidden' : 'icons');
+    syncSidebar();
+  }
   function setCollapsed(c) {
+    if (isMobile()) return setMobState(c ? (mobState() === 'hidden' ? 'hidden' : 'icons') : 'open');
     sidebar.classList.toggle('collapsed', c);
-    if (!isMobile()) ls.set('sidebarCollapsed', c ? '1' : '0');
+    ls.set('sidebarCollapsed', c ? '1' : '0');
     if (c) { $('bandSwitchWrap').classList.remove('open'); }
     syncSidebar();
   }
-  if (isMobile() || ls.get('sidebarCollapsed') === '1') sidebar.classList.add('collapsed');
+  function applyMobileStart() { if (isMobile()) setMobState(ls.get('sideMobile') === 'hidden' ? 'hidden' : 'icons'); }
+  if (isMobile()) applyMobileStart(); else if (ls.get('sidebarCollapsed') === '1') sidebar.classList.add('collapsed');
   syncSidebar();
-  $('toggle').addEventListener('click', () => setCollapsed(!sidebar.classList.contains('collapsed')));
+  $('toggle').addEventListener('click', () => {
+    if (!isMobile()) return setCollapsed(!sidebar.classList.contains('collapsed'));
+    setMobState(mobState() === 'open' ? 'icons' : 'hidden');   // offen -> Symbole -> ganz weg
+  });
+  $('sideTab').addEventListener('click', () => setMobState('open'));
   $('sideBackdrop').addEventListener('click', () => setCollapsed(true));
   $('sideBackdrop').addEventListener('touchstart', e => { e.preventDefault(); setCollapsed(true); }, { passive: false });
   // Auf dem Handy nach der Wahl einer Seite automatisch einklappen
   document.querySelectorAll('.sidebar [data-page]').forEach(b => b.addEventListener('click', () => { if (isMobile() && Date.now() - lastNavDrag > 400) setCollapsed(true); }));
-  // Wischen auf dem Handy: vom linken Rand nach rechts = aufklappen, nach links = einklappen
+  // Wischen auf dem Handy: vom linken Rand nach rechts = eine Stufe auf, nach links = eine Stufe zu
   (() => {
     let sx = 0, sy = 0, fromRail = false, tracking = false;
     document.addEventListener('touchstart', e => {
@@ -5508,12 +5540,165 @@
       const t = e.changedTouches[0];
       const dx = t.clientX - sx, dy = t.clientY - sy;
       if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-      const collapsed = sidebar.classList.contains('collapsed');
-      if (!collapsed && dx < 0) setCollapsed(true);
-      else if (collapsed && dx > 0 && fromRail) setCollapsed(false);
+      const st = mobState();
+      if (dx < 0) { if (st === 'open') setMobState('icons'); else if (st === 'icons' && fromRail) setMobState('hidden'); }
+      else if (fromRail) setMobState(st === 'hidden' ? 'icons' : 'open');
     }, { passive: true });
   })();
-  if (mobileMq.addEventListener) mobileMq.addEventListener('change', () => { if (isMobile()) sidebar.classList.add('collapsed'); syncSidebar(); });
+  if (mobileMq.addEventListener) mobileMq.addEventListener('change', () => { if (isMobile()) applyMobileStart(); else { $('app').classList.remove('side-hidden'); sidebar.classList.toggle('collapsed', ls.get('sidebarCollapsed') === '1'); } syncSidebar(); });
+
+  // ================= Entwickler-Zugang =================
+  // Web-Version: eigene Firebase-Sitzung. Die ID wird zur E-Mail (housi:666 -> housi666@stagemate.dev);
+  //   Zugriff auf alle Daten nur, wenn developers/<uid> in Firestore existiert (Firestore-Regeln).
+  // Claude-/Lokal-Version: nur eigene Testdaten; Prüfung über eine SHA-256-Prüfsumme (kein Klartext im Code).
+  const DEV_HASH = '3423fa80ec754fc0646d8a962a0fcb072bfb8f964544e1373a5e7856e14a01be';
+  const devEmail = id => String(id || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '') + '@stagemate.dev';
+  let devDb = null, devData = null, devTab = 'bands';
+  async function sha256(t) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  function syncDevBtn() {
+    const onAuth = !$('auth').classList.contains('hidden'), onHub = !$('app').classList.contains('hidden') && inHub;
+    $('devBtn').classList.toggle('hidden', !(onAuth || onHub) || !$('devPanel').classList.contains('hidden'));
+  }
+  setInterval(syncDevBtn, 700); syncDevBtn();
+  const closeDevModal = () => $('devModal').classList.add('hidden');
+  $('devBtn').addEventListener('click', () => { $('devModal').classList.remove('hidden'); setMsg($('devMsg'), ''); $('devPw').value = ''; setTimeout(() => $('devId').focus(), 30); });
+  ['devX', 'devCancel'].forEach(k => $(k).addEventListener('click', closeDevModal));
+  $('devModal').addEventListener('click', e => { if (e.target === $('devModal')) closeDevModal(); });
+  $('devPw').addEventListener('keydown', e => { if (e.key === 'Enter') $('devGo').click(); });
+  $('devGo').addEventListener('click', async () => {
+    const id = $('devId').value.trim(), pw = $('devPw').value;
+    if (!id || !pw) return setMsg($('devMsg'), 'Bitte ID und Passwort eingeben.', 'error');
+    $('devGo').disabled = true; setMsg($('devMsg'), 'Prüfe …');
+    try {
+      if (Data.backend === 'firebase') {
+        const r = await Data.devSignIn(devEmail(id), pw);
+        if (!r.ok) return setMsg($('devMsg'), r.error + (r.uid ? ` (UID: ${r.uid})` : ''), 'error');
+        devDb = r.db; $('devWho').textContent = `${devEmail(id)} · Firebase`;
+      } else {
+        if (await sha256(id + '|' + pw) !== DEV_HASH) return setMsg($('devMsg'), 'ID oder Passwort stimmt nicht.', 'error');
+        devDb = rawDb; $('devWho').textContent = `${id} · lokale Daten (${Data.backend})`;
+      }
+      closeDevModal(); $('devPw').value = '';
+      $('devPanel').classList.remove('hidden'); syncDevBtn();
+      devLoad();
+    } catch (e) { setMsg($('devMsg'), 'Das hat nicht geklappt: ' + (e && e.message || e), 'error'); }
+    finally { $('devGo').disabled = false; }
+  });
+  $('devClose').addEventListener('click', async () => {
+    if (Data.backend === 'firebase') await Data.devSignOut();
+    devDb = null; devData = null; $('devBody').innerHTML = '';
+    $('devPanel').classList.add('hidden'); syncDevBtn();
+  });
+  $('devReload').addEventListener('click', () => devLoad());
+  document.querySelectorAll('#devTabs [data-dt]').forEach(b => b.addEventListener('click', () => {
+    devTab = b.dataset.dt; document.querySelectorAll('#devTabs [data-dt]').forEach(x => x.classList.toggle('on', x === b)); devRender();
+  }));
+  let devSearchT = null;
+  $('devSearch').addEventListener('input', () => { clearTimeout(devSearchT); devSearchT = setTimeout(devRender, 150); });
+  async function devAll(path) {
+    try { const q = await devDb.collection(path).get(); return q.docs.map(d => ({ id: d.id, ...(d.data() || {}) })); }
+    catch (e) { return { error: (e && (e.code || e.message)) || 'Fehler' }; }
+  }
+  async function devLoad() {
+    if (!devDb) return;
+    const body = $('devBody'); body.innerHTML = ''; body.append(el('div', 'dev-note', 'Daten werden geladen …'));
+    const [bands_, members, contacts, presence] = await Promise.all(['bands', 'members', 'contacts', 'presence'].map(devAll));
+    devData = { bands: bands_, members, contacts, presence, events: {}, at: new Date() };
+    devRender();
+  }
+  const devArr = x => Array.isArray(x) ? x : [];
+  const devJson = o => { const pre = el('pre', 'dev-json'); pre.textContent = JSON.stringify(o, (k, v) => typeof v === 'string' && v.startsWith('data:image/') ? `[Bild, ${Math.round(v.length / 1024)} kB]` : v, 2); return pre; };
+  const devErr = (name, x) => x && x.error ? el('div', 'msg error', `${name}: kein Zugriff (${x.error}). Firestore-Regeln für Entwickler veröffentlicht?`) : null;
+  function devPres(id) {
+    const p = devArr(devData.presence).find(x => x.id === id);
+    if (!p) return ['noch nie online', ''];
+    if (isPrivate(p)) return ['Privat', 'priv'];
+    if (isOnline(p)) return ['online', 'on'];
+    return ['zuletzt ' + whenText(p.lastSeen), ''];
+  }
+  function devRender() {
+    const body = $('devBody'); body.innerHTML = '';
+    if (!devData) return;
+    const q = $('devSearch').value.trim().toLowerCase();
+    const hit = (...xs) => !q || xs.some(x => String(x == null ? '' : x).toLowerCase().includes(q));
+    const B = devArr(devData.bands), M = devArr(devData.members), C = devArr(devData.contacts);
+    ['bands', 'members', 'contacts', 'presence'].forEach(k => { const e = devErr(k, devData[k]); if (e) body.append(e); });
+    const bandName = id => (B.find(b => b.id === id) || {}).name || id;
+    const mail = id => (C.find(c => c.id === id) || {}).email || '';
+    if (devTab === 'stats') {
+      const now = Date.now(), P = devArr(devData.presence);
+      const box = el('div', 'dev-stats');
+      [['Bands', B.length], ['Benutzer', M.length], ['Gerade online', P.filter(p => isOnline(p) && !p.private).length], ['Privat (Startbildschirm)', P.filter(isPrivate).length],
+       ['Aktiv letzte 7 Tage', P.filter(p => now - (p.lastSeen || 0) < 7 * 864e5).length], ['Ohne Band', M.filter(m => !devArr(m.bandIds).length).length]]
+        .forEach(([t, n]) => { const d = el('div', 'dev-stat'); d.append(el('b', null, String(n)), el('span', null, t)); box.append(d); });
+      body.append(box, el('div', 'dev-note', 'Stand: ' + devData.at.toLocaleString('de-CH')));
+      return;
+    }
+    if (devTab === 'bands') {
+      const list = B.filter(b => hit(b.name, b.tag, b.id, b.code, b.createdBy)).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de'));
+      body.append(el('div', 'dev-note', `${list.length} von ${B.length} Bands`));
+      list.forEach(b => {
+        const mem = M.filter(m => devArr(m.bandIds).includes(b.id));
+        const d = el('details', 'dev-row'), sm = el('summary');
+        sm.append(el('b', null, b.name || '(ohne Name)'));
+        if (b.tag) sm.append(tagChip(b.tag));
+        sm.append(el('span', 'dev-chip', `${mem.length} Mitglieder`), el('span', 'dev-chip', 'Code ' + (b.code || '–')), el('span', 'dev-chip', 'ID ' + b.id));
+        d.append(sm);
+        const inn = el('div', 'dev-in'); d.append(inn);
+        d.addEventListener('toggle', async () => {
+          if (!d.open || inn.childElementCount) return;
+          const admin = M.find(m => m.id === b.createdBy);
+          inn.append(el('div', null, `Admin (Gründer): ${admin ? admin.name : (b.createdBy || '–')}`));
+          inn.append(el('h4', null, 'Mitglieder'));
+          const t = el('table'); t.innerHTML = '<tr><th>Name</th><th>PUID</th><th>Rollen</th><th>E-Mail</th><th>Status</th></tr>';
+          mem.forEach(m => {
+            const tr = el('tr'), ms = (m.memberships || {})[b.id] || {}, [st] = devPres(m.id);
+            [m.name, m.puid || '–', devArr(ms.roles).join(', ') || '–', mail(m.id) || '–', st].forEach(v => tr.append(el('td', null, v)));
+            t.append(tr);
+          });
+          inn.append(t);
+          inn.append(el('h4', null, 'Termine und Gigs'));
+          const evs = devData.events[b.id] || (devData.events[b.id] = await devAll(`calendar/${b.id}/events`));
+          const ee = devErr('Termine', evs);
+          if (ee) inn.append(ee);
+          else if (!evs.length) inn.append(el('div', 'dev-note', 'Keine Termine.'));
+          else {
+            const t2 = el('table'); t2.innerHTML = '<tr><th>Datum</th><th>Titel</th><th>Art</th></tr>';
+            evs.slice().sort((x, y) => String(x.start || x.date || '').localeCompare(String(y.start || y.date || ''))).forEach(ev => {
+              const tr = el('tr'); [String(ev.start || ev.date || '–').slice(0, 16).replace('T', ' '), ev.title || ev.name || '–', ev.gig ? 'Gig' : (ev.cat || ev.category || 'Termin')].forEach(v => tr.append(el('td', null, v))); t2.append(tr);
+            });
+            inn.append(t2);
+          }
+          inn.append(el('h4', null, 'Rohdaten der Band'), devJson(b));
+        });
+        body.append(d);
+      });
+      if (!list.length) body.append(el('div', 'dev-note', 'Keine Bands gefunden.'));
+      return;
+    }
+    // Benutzer
+    const list = M.filter(m => hit(m.name, m.nick, m.firstName, m.lastName, m.puid, m.id, mail(m.id), ...devArr(m.bandIds).map(bandName))).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de'));
+    body.append(el('div', 'dev-note', `${list.length} von ${M.length} Benutzern`));
+    list.forEach(m => {
+      const d = el('details', 'dev-row'), sm = el('summary'), [st, cls] = devPres(m.id);
+      sm.append(el('b', null, m.name || '(ohne Name)'), el('span', 'dev-chip', m.puid || 'ohne PUID'), el('span', 'dev-chip ' + cls, st));
+      const bn = devArr(m.bandIds).map(bandName);
+      sm.append(el('span', 'dev-chip', bn.length ? bn.join(' · ') : 'keine Band'));
+      d.append(sm);
+      const inn = el('div', 'dev-in'); d.append(inn);
+      d.addEventListener('toggle', () => {
+        if (!d.open || inn.childElementCount) return;
+        const c = C.find(x => x.id === m.id) || {};
+        inn.append(el('div', null, `UID: ${m.id}`), el('div', null, `E-Mail: ${c.email || '–'} · Telefon: ${c.phone || '–'}`));
+        inn.append(el('h4', null, 'Profil (Rohdaten)'), devJson(m));
+      });
+      body.append(d);
+    });
+    if (!list.length) body.append(el('div', 'dev-note', 'Keine Benutzer gefunden.'));
+  }
 
   // ================= Start =================
   async function init() {
@@ -5521,14 +5706,14 @@
     renderAuth();
     const s0 = await Data.connect({ timeoutMs: 10000, onNeedLogin: () => showFbLogin(), onOffline: () => showFbLogin(true) });
     hideFbLogin();
-    db = withContacts(s0.db); uid = s0.uid; suggestedName = s0.name || ''; suggestedEmail = s0.email || ''; if (s0.readOnly) readOnly = true;
+    rawDb = s0.db; db = withContacts(s0.db); uid = s0.uid; suggestedName = s0.name || ''; suggestedEmail = s0.email || ''; if (s0.readOnly) readOnly = true;
     try {
       const s = await db.doc('members/' + uid).get();
       // Kopie: Objekte aus der Datenbank können schreibgeschützt sein
       profile = s.exists ? await loadOwnContact(clone(s.data())) : null;
       bands = profile && Array.isArray(profile.bandIds) ? await loadBands(profile.bandIds) : {};
     } catch (e) {
-      if (s0.mode !== 'local') { const s1 = Data.useLocal(); db = withContacts(s1.db); uid = s1.uid; }
+      if (s0.mode !== 'local') { const s1 = Data.useLocal(); rawDb = s1.db; db = withContacts(s1.db); uid = s1.uid; }
       profile = null; bands = {};
     }
     mode = Data.mode;
