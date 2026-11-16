@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.14 · Build 36 · 2026-11-17 */
+/*! Stagemate v0.4.16 · Build 38 · 2026-11-17 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -2770,6 +2770,7 @@
       const keep = ttPend && ttMap[ttPend]; ttMap = {};
       snap.docs.forEach(d => { ttMap[d.id] = keep && d.id === ttPend ? keep : { id: d.id, ...d.data() }; });
       if (currentPage === 'page8') { if ($('ttModal').classList.contains('hidden')) renderTimetable(); }
+      else if (currentPage === 'page3') renderGigs();
       else if (currentPage === 'page2' && calView === 'day' && ttCalOn()) renderCalendar(0);
       else if (currentPage === 'overview') renderOverview();
     };
@@ -5943,6 +5944,21 @@
       .filter(([, v]) => v).map(([k, v]) => [k, /^\d\d:\d\d$/.test(v) ? v + ' Uhr' : v]);
     const sumPlan = [sc.getin ? 'Get In ' + sc.getin : '', ev.start && !ev.allDay ? 'Gig ' + ev.start : ''].filter(Boolean).join(' · ');
     section('Zeitplan', sumPlan, rows([['Datum', fmtLong(d)], ...plan]), true);
+    // Line-up: alle Bands dieses Gigs aus der Timetable
+    ttSub();
+    {
+      const lu = ttEntries(ev.id);
+      if (lu.length) {
+        const box = el('div', 'gig-lineup'), own = ((bands[currentBand] && bands[currentBand].name) || '').toLowerCase();
+        lu.forEach(x => {
+          const r = el('button', 'lu-row' + (ttName(x).toLowerCase() === own ? ' own' : '')); r.type = 'button';
+          r.append(el('span', 'lu-t', x.time + (x.end ? ' – ' + x.end : '')), el('span', 'lu-b', ttName(x)));
+          r.title = 'Zur Timetable'; r.addEventListener('click', e => { if (levelFor(currentBand, 'page8') === 'hidden') return previewBlocked(e, 'Keine Berechtigung: Die Registerkarte „Timetable“ ist für dich ausgeblendet.'); ttSel = ev.id; showPage('page8'); });
+          box.appendChild(r);
+        });
+        section('Line-up', lu.length === 1 ? '1 Band' : lu.length + ' Bands', box, false);
+      }
+    }
     // Google Maps: eigener Link oder automatisch aus Location + Adresse; dazu Route planen
     const place = [ev.location, (ev.address || '').replace(/\n/g, ', ')].filter(Boolean).join(', ');
     let maps = null;
@@ -6480,7 +6496,7 @@
     if (!devDb) return;
     const body = $('devBody'); body.innerHTML = ''; body.append(el('div', 'dev-note', 'Daten werden geladen …'));
     const [bands_, members, contacts, presence] = await Promise.all(['bands', 'members', 'contacts', 'presence'].map(devAll));
-    devData = { bands: bands_, members, contacts, presence, events: {}, at: new Date() };
+    devData = { bands: bands_, members, contacts, presence, events: {}, extra: {}, at: new Date() };
     devRender();
   }
   const devArr = x => Array.isArray(x) ? x : [];
@@ -6554,6 +6570,20 @@
               const tr = el('tr'); [String(ev.start || ev.date || '–').slice(0, 16).replace('T', ' '), ev.title || ev.name || '–', ev.gig ? 'Gig' : (ev.cat || ev.category || 'Termin')].forEach(v => tr.append(el('td', null, v))); t2.append(tr);
             });
             inn.append(t2);
+          }
+          const extra = [['songs', 'Songs', `songs/${b.id}/items`, x => [x.title || x.name || '–', x.artist || x.band || '', x.key || '', x.bpm || '']],
+            ['setlists', 'Setlists', `setlists/${b.id}/lists`, x => [x.name || '–', devArr(x.items).length + ' Einträge', x.vis || '', x.gigId || '']],
+            ['timetables', 'Timetables', `timetables/${b.id}/lists`, x => [x.gigId || x.id, devArr(x.entries).length + ' Slots', devArr(x.entries).map(e => (e.time || '') + ' ' + (e.band || e.title || '')).join(' | '), '']]];
+          for (const [k, title, path, row] of extra) {
+            inn.append(el('h4', null, title));
+            const key = b.id + '/' + k;
+            const data = devData.extra[key] || (devData.extra[key] = await devAll(path));
+            const er = devErr(title, data);
+            if (er) { inn.append(er); continue; }
+            if (!data.length) { inn.append(el('div', 'dev-note', 'Keine Einträge.')); continue; }
+            const t3 = el('table');
+            data.forEach(x => { const tr = el('tr'); row(x).forEach(v => tr.append(el('td', null, String(v)))); t3.append(tr); });
+            inn.append(t3);
           }
           inn.append(el('h4', null, 'Rohdaten der Band'), devJson(b));
         });

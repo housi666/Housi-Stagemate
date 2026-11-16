@@ -1,16 +1,22 @@
-/*! Stagemate v0.4.14 · Build 36 · 2026-11-17 */
+/*! Stagemate v0.4.16 · Build 38 · 2026-11-17 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.14';
-const APP_BUILD = 36;
+const APP_VERSION = 'v0.4.16';
+const APP_BUILD = 38;
 const APP_BUILD_DATE = '2026-11-17';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.16', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Entwicklerseite: Bands zeigen jetzt zusätzlich Songs, Setlists und Timetables (zusammen mit Mitgliedern und Termine).' }
+  ] },
+  { version: 'v0.4.15', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Gig: neuer klappbarer Abschnitt „Line-up“ zeigt alle Bands des Gigs aus der Timetable (eigene Band hervorgehoben); Klick öffnet die Timetable' },
+  ] },
   { version: 'v0.4.14', date: '2026-11-17', items: [
     { type: 'neu', text: 'Desktop: Kalender, Gigs, Setlist, Songs, Timetable, Verwaltung und Startbildschirm füllen die ganze Breite; die Kalenderhöhe folgt der Fensterhöhe (passt sich beim Zoomen im Browser an den Bildschirmrand an)' },
   ] },

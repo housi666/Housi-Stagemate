@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.14 · Build 36 · 2026-11-17 */
+/*! Stagemate v0.4.16 · Build 38 · 2026-11-17 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1646,3 +1646,9 @@
   .cal-card, .gigs-wrap, .sl-wrap, .admin-wrap, .fin-wrap, #page-home { max-width: none; width: 100%; }
   .cal-scroll { height: max(380px, calc(100vh - 300px)); }
 }
+
+/* v0.4.15 Line-up im Gig */
+.gig-lineup { display: flex; flex-direction: column; gap: 4px; }
+.lu-row { display: flex; gap: 12px; text-align: left; width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: inherit; cursor: pointer; }
+.lu-row.own { border-color: var(--accent); font-weight: 700; }
+.lu-t { min-width: 96px; font-variant-numeric: tabular-nums; color: var(--muted); }
