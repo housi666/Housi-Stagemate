@@ -1,4 +1,4 @@
-/*! Stagemate v0.3.0 · Build 15 · 2026-11-16 */
+/*! Stagemate v0.3.1 · Build 16 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -940,7 +940,7 @@
     $('brandSub').textContent = 'Band-Verwaltung';
     if (currentPage === 'home') currentPage = 'overview';
     currentBand = ids.includes(bandId) ? bandId : ids[0];
-    ls.sset('bandLoggedIn', '1');
+    ls.sset('bandLoggedIn', '1'); ls.sset('smBand', currentBand);
     applyNavOrder();
     const sw = $('bandSwitch'); sw.innerHTML = '';
     ids.forEach(id => { const o = el('option', null, bands[id].name + (isFounder(id) ? ' (Admin)' : '')); o.value = id; sw.appendChild(o); });
@@ -949,7 +949,7 @@
     $('auth').classList.add('hidden');
     $('app').classList.remove('hidden');
     ensurePuid();
-    tickSideClock(); delete bandMembersCache[currentBand]; startPresence();
+    tickSideClock(); delete bandMembersCache[currentBand]; startPresence(); syncSidebar();
     if (form.parentElement !== $('profileSlot')) { $('profileSlot').appendChild(form); prepareForm(); }
     renderAppHeader();
     showPage(currentPage);
@@ -1048,6 +1048,10 @@
   $('navFwd').addEventListener('click', () => navGo(1));
   $('setlistBack').addEventListener('click', () => { if (navPos > 0) navGo(-1); else showPage('overview'); });
   function showPage(page) {
+    if (page === 'profile' || page === 'settings') {
+      if (!inHub) { enterHub(); }
+      return openHubSection(page);
+    }
     const reg = REGISTERS.find(r => r.id === page);
     if (reg && levelFor(currentBand, page) === 'hidden') page = 'overview';
     currentPage = page;
@@ -1217,6 +1221,7 @@
     });
   }
   function renderSideUser() {
+    if (!$('appAvatar')) return;   // Profil liegt seit v0.3.1 nur noch auf der persönlichen Übersicht
     setAvatar($('appAvatar'), profile.name, profile.photo, { zoom: false });
     const an = $('appName'); an.innerHTML = ''; an.append(profile.name);
     bandIdsOf(profile).forEach(id => { const b = bands[id]; if (b && b.tag && showOf(b).tag) an.append(tagChip(b.tag)); });
@@ -1235,12 +1240,15 @@
     const bn = $('brandName'); bn.innerHTML = ''; bn.append('Stagemate');
     $('brandSub').textContent = 'Startbildschirm';
     const lg = $('brandLogo'); lg.innerHTML = ''; lg.className = 'brand-logo'; lg.onclick = null; lg.appendChild(defaultLogo());
+    { const hl = $('hubLogo'); hl.innerHTML = ''; hl.appendChild(defaultLogo()); }
     renderSideUser();
     applyNavOrder();
     ensurePuid();
     showPage('home');
-    tickSideClock(); startPresence();
+    tickSideClock(); startPresence(); syncSidebar();
   }
+  $('hubTips').addEventListener('click', () => $('tipsBtn').click());
+  $('hubSupport').addEventListener('click', () => $('supportBtn').click());
   $('homeBtn').addEventListener('click', () => enterHub());
   $('onlineBtn').addEventListener('click', () => { if (inHub) return; showPage('overview'); setTimeout(() => $('ovMembers').scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); });
 
@@ -1256,6 +1264,7 @@
     if (c.face === 'analog') { t.classList.add('analog'); t.innerHTML = analogSvg(now); }
     else { t.classList.remove('analog'); t.textContent = fmtTimeOv(now, c.time, true); }
     $('scDate').textContent = fmtDateOv(now, c.date);
+    if (inHub) { $('hubTime').textContent = fmtTimeOv(now, c.time, true); $('hubDate').textContent = fmtDateOv(now, c.date); }
   }
   setInterval(tickSideClock, 1000);
 
@@ -5493,7 +5502,7 @@
   function syncSidebar() {
     const mob = isMobile();
     if (!mob) $('app').classList.remove('side-hidden');
-    $('app').classList.toggle('side-open', mob && !sidebar.classList.contains('collapsed'));
+    $('app').classList.toggle('side-open', mob && !inHub && !sidebar.classList.contains('collapsed'));
     const t = $('toggle'), lbl = t.querySelector('.label');
     const txt = mob && sidebar.classList.contains('collapsed') ? 'Ganz ausblenden' : 'Einklappen';
     if (lbl) lbl.textContent = txt;
@@ -5530,7 +5539,7 @@
   (() => {
     let sx = 0, sy = 0, fromRail = false, tracking = false;
     document.addEventListener('touchstart', e => {
-      if (!isMobile() || $('app').classList.contains('hidden') || e.touches.length !== 1) { tracking = false; return; }
+      if (!isMobile() || inHub || $('app').classList.contains('hidden') || e.touches.length !== 1) { tracking = false; return; }
       const t = e.touches[0];
       sx = t.clientX; sy = t.clientY; tracking = true;
       fromRail = sx < 90;   // auf der schmalen Leiste oder am linken Rand begonnen
@@ -5836,7 +5845,7 @@
     if (profile && needsTerms()) { showTab('register'); setMsg($('regMsg'), 'Bitte akzeptiere die Nutzungsbedingungen, um weiterzumachen.', 'error'); return; }
     if (!profile || !bandIdsOf(profile).length) return;
     // Neu geladen während der Sitzung: direkt zurück in die App
-    if (ls.sget('bandLoggedIn') === '1') return ls.sget('smView') === 'hub' ? enterHub() : enterApp(profile.lastBand);
+    if (ls.sget('bandLoggedIn') === '1') return ls.sget('smView') === 'hub' ? enterHub() : enterApp(ls.sget('smBand') || profile.lastBand);
     // Web-Version: nach der Konto-Anmeldung zuerst der Startbildschirm
     if (Data.backend === 'firebase') enterHub();
   }

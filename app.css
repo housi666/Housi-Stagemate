@@ -1,4 +1,4 @@
-/*! Stagemate v0.3.0 · Build 15 · 2026-11-16 */
+/*! Stagemate v0.3.1 · Build 16 · 2026-11-16 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1361,3 +1361,22 @@
   .home-head { flex-wrap: wrap; }
   .home-head > div:not(.avatar) { min-width: 0; flex: 1 1 220px; }
   @media (max-width: 760px) { .home-head .home-logout { margin-left: 0; } }
+
+  /* ================= v0.3.1: persönliche Übersicht ohne Seitenleiste ================= */
+  #app.hub-mode .sidebar, #app.hub-mode .side-tab, #app.hub-mode .side-backdrop { display: none !important; }
+  #app.hub-mode main { margin-left: 0 !important; pointer-events: auto !important; user-select: auto !important; }
+  .hub-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--panel); color: var(--text-on-panel); border-radius: 14px; padding: 12px 16px; margin-bottom: 20px; }
+  .hub-brand { display: flex; align-items: center; gap: 10px; }
+  .hub-logo { display: inline-flex; width: 36px; height: 36px; }
+  .hub-logo svg { width: 36px; height: 36px; }
+  .hub-name { color: #fff; font-weight: 700; font-size: 16px; }
+  .hub-sub { font-size: 11px; color: #8a8d9b; letter-spacing: .08em; text-transform: uppercase; }
+  .hub-status { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 8px; border: 1px solid #3b82f6; border-radius: 999px; color: #bfdbfe; font-size: 12px; }
+  .hub-status .on-dot { width: 8px; height: 8px; border-radius: 50%; background: #3b82f6; box-shadow: 0 0 6px rgba(59,130,246,.7); }
+  .hub-clock { font-family: ui-monospace, Consolas, monospace; text-align: center; line-height: 1.15; background: #0b0c10; border: 1px solid #2f3240; border-radius: 8px; padding: 4px 12px; }
+  .hub-time { color: var(--accent); font-size: 17px; font-weight: 700; letter-spacing: .06em; }
+  .hub-date { color: #c9cbd6; font-size: 11.5px; }
+  .hub-bar .btn.ghost { background: transparent; color: #e5e7eb; border: 1px solid #3a3d4a; display: inline-flex; align-items: center; gap: 6px; }
+  .hub-bar .btn.ghost:hover { border-color: var(--accent); color: #fff; }
+  .hub-bar .home-logout { margin-left: 0; }
+  @media (max-width: 760px) { .hub-bar { gap: 10px; } .hub-bar .dev-sp { display: none; } }

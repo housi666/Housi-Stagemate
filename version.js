@@ -1,16 +1,21 @@
-/*! Stagemate v0.3.0 · Build 15 · 2026-11-16 */
+/*! Stagemate v0.3.1 · Build 16 · 2026-11-16 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.3.0';
-const APP_BUILD = 15;
+const APP_VERSION = 'v0.3.1';
+const APP_BUILD = 16;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.3.1', date: '2026-11-16', items: [
+    { type: 'besser', text: 'Persönliche Übersicht ohne Seitenleiste, mit eigener Kopfzeile (Logo, Status, Uhr, Tipps, Support, Abmelden)' },
+    { type: 'besser', text: 'Die Bandseite öffnet sich nur noch über die Bandwahl auf der Übersicht' },
+    { type: 'besser', text: 'Profil und Einstellungen gibt es nur noch auf der persönlichen Übersicht' },
+  ] },
   { version: 'v0.3.0', date: '2026-11-16', items: [
     { type: 'neu', text: 'Nach der Anmeldung immer zuerst der persönliche Startbildschirm, erst dann die Bandseite' },
     { type: 'neu', text: 'Online-Status „Privat“ (blau), solange du auf dem Startbildschirm bist' },
