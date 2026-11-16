@@ -1,9 +1,9 @@
-/*! Stagemate v0.4.9 · Build 31 · 2026-11-16 */
+/*! Stagemate v0.4.11 · Build 33 · 2026-11-16 */
 /* Stagemate – Nutzungsbedingungen und Datenschutzerklärung
  * Vorlage, keine Rechtsberatung. Bei Änderungen LEGAL_VERSION anpassen:
  * dann müssen alle Benutzer die neue Fassung erneut akzeptieren.
  */
-const LEGAL_VERSION = '2026-11-16';
+const LEGAL_VERSION = '2026-11-17';
 
 const LEGAL_TERMS = `
 <h4>1. Anbieter</h4>
@@ -12,10 +12,13 @@ const LEGAL_TERMS = `
 <h4>2. Gegenstand</h4>
 <p>Stagemate ist eine kostenlose Web-App zur Organisation von Bands. Sie befindet sich in der <b>Alpha-Phase</b>. Funktionen, Aussehen und gespeicherte Daten können sich jederzeit ändern, eingeschränkt oder ganz eingestellt werden. Es besteht kein Anspruch auf Verfügbarkeit, Fehlerfreiheit oder dauerhafte Speicherung. Sichere wichtige Informationen zusätzlich selbst.</p>
 
-<h4>3. Konto</h4>
+<h4>3. Erstellung mit KI</h4>
+<p>Diese Web-App wurde zum grössten Teil mit Hilfe der KI <b>Claude</b> (Anthropic) erstellt. Programmcode, Texte und Gestaltung stammen daher teilweise von einer KI. Ich habe darauf nur begrenzten Einfluss und kann nicht ausschliessen, dass dabei ungewollt Inhalte oder Code entstanden sind, die Rechte Dritter verletzen (z.B. Urheberrechte). Das geschieht nicht absichtlich. Für solche unbeabsichtigten Verstösse übernehme ich, soweit gesetzlich zulässig, keine Verantwortung und keine Gewähr. Hinweise auf mögliche Verstösse nehme ich über die Support-Kanäle entgegen und prüfe sie.</p>
+
+<h4>4. Konto</h4>
 <p>Du machst wahre Angaben, hältst dein Passwort geheim und bist für alle Aktivitäten in deinem Konto verantwortlich. Die Nutzung ist ab 16 Jahren erlaubt, jüngere Personen brauchen das Einverständnis ihrer Eltern.</p>
 
-<h4>4. Verhaltensregeln</h4>
+<h4>5. Verhaltensregeln</h4>
 <p>Verboten sind insbesondere:</p>
 <ul>
 <li>rassistische, menschenverachtende, diskriminierende, sexistische oder gewaltverherrlichende Inhalte,</li>
@@ -26,27 +29,27 @@ const LEGAL_TERMS = `
 </ul>
 <p>Das gilt für alle Eingaben, auch für Nicknames, Bandnamen, Notizen und Bilder.</p>
 
-<h4>5. Verantwortung für Inhalte</h4>
+<h4>6. Verantwortung für Inhalte</h4>
 <p>Für alle Inhalte, die du eingibst oder hochlädst, bist <b>allein du verantwortlich</b>. Der Anbieter prüft Inhalte nicht. Er darf Inhalte, die gegen diese Bedingungen verstossen, ohne Vorankündigung löschen und Konten sperren oder löschen.</p>
 
-<h4>6. Sicherheit und Links</h4>
+<h4>7. Sicherheit und Links</h4>
 <p>Der Anbieter fragt dich <b>nie</b> per Nachricht nach deinem Passwort. Offizielle Hinweise kommen nur aus Stagemate selbst oder von den Kanälen <b>housi_666</b>. Klicke keine Links an, die nicht nachweislich vom Anbieter stammen. Links und Dateien anderer Benutzer öffnest du auf eigene Gefahr.</p>
 <p>Trotz Schutzmassnahmen lässt sich nicht ausschliessen, dass Daten durch Hackerangriffe, technische Fehler oder Fehler Dritter verloren gehen oder unberechtigt eingesehen werden.</p>
 
-<h4>7. Haftung und Gewährleistung</h4>
+<h4>8. Haftung und Gewährleistung</h4>
 <p>Stagemate wird ohne jede Gewährleistung zur Verfügung gestellt. Soweit gesetzlich zulässig, ist jede Haftung des Anbieters ausgeschlossen, insbesondere für Datenverlust, Ausfälle, Fehlfunktionen, verpasste Termine, finanzielle Einbussen, Inhalte anderer Benutzer, Hackerangriffe und Schäden durch Dienste Dritter (z.B. Google, GitHub). Vorbehalten bleibt die zwingende Haftung für rechtswidrige Absicht und grobe Fahrlässigkeit (Art. 100 OR).</p>
 <p>Du stellst den Anbieter von Ansprüchen Dritter frei, die aus deinen Inhalten oder deinem Verhalten entstehen.</p>
 
-<h4>8. Änderungen</h4>
+<h4>9. Änderungen</h4>
 <p>Der Anbieter kann diese Bedingungen ändern. Eine neue Fassung musst du beim nächsten Anmelden akzeptieren, um Stagemate weiter zu nutzen.</p>
 
-<h4>9. Beendigung</h4>
+<h4>10. Beendigung</h4>
 <p>Du kannst dein Konto jederzeit unter <b>Profil &amp; Bands → Konto</b> löschen.</p>
 
-<h4>10. Recht und Gerichtsstand</h4>
+<h4>11. Recht und Gerichtsstand</h4>
 <p>Es gilt Schweizer Recht. Gerichtsstand ist, soweit gesetzlich zulässig, der Wohnsitz des Anbieters.</p>
 
-<h4>11. Teilunwirksamkeit</h4>
+<h4>12. Teilunwirksamkeit</h4>
 <p>Ist eine Bestimmung unwirksam, bleiben die übrigen gültig. An ihre Stelle tritt eine zulässige Regelung, die dem Zweck möglichst nahekommt.</p>
 `;
 

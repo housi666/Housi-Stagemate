@@ -1,16 +1,25 @@
-/*! Stagemate v0.4.9 · Build 31 · 2026-11-16 */
+/*! Stagemate v0.4.11 · Build 33 · 2026-11-16 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.9';
-const APP_BUILD = 31;
+const APP_VERSION = 'v0.4.11';
+const APP_BUILD = 33;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.11', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Nutzungsbedingungen: neuer Abschnitt „Erstellung mit KI“ (App grösstenteils mit Claude erstellt, keine Verantwortung für unbeabsichtigte Rechtsverstösse, soweit gesetzlich zulässig); neue Fassung muss erneut akzeptiert werden' },
+    { type: 'neu', text: 'Tipps: oben gut sichtbarer Hinweis „Dieses Tool wurde mit Claude (KI) erstellt“' },
+    { type: 'neu', text: 'Anmeldebildschirm: Hinweis, dass das Tool mit Hilfe von KI erstellt wurde' },
+    { type: 'neu', text: 'Tipps: gesperrter Knopf „Tutorial“ mit blauem Hinweis oben („Tutorials sind für die Prerelease-Phase (v0.9.0) geplant“)' },
+  ] },
+  { version: 'v0.4.10', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Profil: Bereich „Konto“ (Passwort ändern, Konto löschen) ist wie Persönliche Angaben und Deine Bands auf- und zuklappbar' },
+  ] },
   { version: 'v0.4.9', date: '2026-11-17', items: [
     { type: 'neu', text: 'Kalender: Klick auf einen Gig öffnet die Gig-Seite mit aufgeklapptem Gig (kein Termin-Fenster mehr für Gigs)' },
     { type: 'neu', text: 'Termin erstellen: Kategorie „Gig“ nicht mehr wählbar; stattdessen gelber Knopf „Zur Gig-Seite“, danach leuchtet „Gig erstellen“ dreimal' },

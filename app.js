@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.9 · Build 31 · 2026-11-16 */
+/*! Stagemate v0.4.11 · Build 33 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -2314,7 +2314,7 @@
     let folded = {};
     try { folded = JSON.parse(ls.get('bandFolded') || '{}') || {}; } catch (e) {}
     const save = () => { try { ls.set('bandFolded', JSON.stringify(folded)); } catch (e) {} };
-    const blocks = () => [...document.querySelectorAll('#profileForm .pf-fold')];
+    const blocks = () => [...document.querySelectorAll('#profileForm .pf-fold, #accountCard.pf-fold')];
     blocks().forEach(b => {
       const key = b.dataset.foldKey, h = b.querySelector(':scope > .section-title');
       if (!h) return;
@@ -6231,10 +6231,18 @@
     const names = { home: 'Startbildschirm', team: 'Verwaltung', overview: 'Übersicht', page2: 'Kalender', page3: 'Gigs', page4: 'Checkliste', page5: 'Finanzen', page6: 'Setlist', page7: 'Songs', page8: 'Timetable', profile: 'Profil & Bands', settings: 'Einstellungen' };
     return { name: names[page] || 'diese Seite', list: (t[page] || []).filter(Boolean) };
   }
+  function infoTop(text) {
+    let n = $('infoTop'); if (!n) { n = el('div', 'info-top'); n.id = 'infoTop'; document.body.appendChild(n); }
+    n.textContent = text; n.classList.add('show'); clearTimeout(infoTop.t); infoTop.t = setTimeout(() => n.classList.remove('show'), 3500);
+  }
   function openTips() {
     $('tipsTitle').textContent = 'Tipps';
     const body = $('tipsBody'); body.innerHTML = '';
+    body.append(el('div', 'note-info tips-ai', '🤖 Dieses Tool wurde mit Claude (KI) erstellt.'));
     const tools = el('div', 'fold-tools tips-tools');
+    const tut = el('button', 'btn small ghost pv-locked tut-btn', '🔒 Tutorial'); tut.type = 'button';
+    tut.addEventListener('click', () => infoTop('Tutorials sind für die Prerelease-Phase (v0.9.0) geplant.'));
+    tools.append(tut);
     const allOpen = el('button', 'linkish-btn', 'Alle aufklappen'), allClose = el('button', 'linkish-btn', 'Alle zuklappen');
     [allOpen, allClose].forEach(x => { x.type = 'button'; });
     allOpen.addEventListener('click', () => body.querySelectorAll('details').forEach(d => { d.open = true; }));

@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.9 · Build 31 · 2026-11-16 */
+/*! Stagemate v0.4.11 · Build 33 · 2026-11-16 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1626,3 +1626,11 @@
 .ev-togig { margin-left: auto; margin-right: 8px; background: #f5c518; color: #000; border-color: #f5c518; }
 @keyframes flash3 { 0%,100% { box-shadow: 0 0 0 0 transparent; transform: none; } 50% { box-shadow: 0 0 0 6px rgba(245,197,24,.75); transform: scale(1.08); } }
 .flash3 { animation: flash3 .8s ease-in-out 3; }
+#accountCard > .section-title { margin: 0 0 8px; padding-top: 0; border-top: 0; }
+
+/* v0.4.11 */
+.info-top { position: fixed; top: 12px; left: 50%; transform: translate(-50%, -140%); z-index: 9999; max-width: 92vw; padding: 10px 16px; border-radius: 10px; background: #2563eb; color: #fff; font-weight: 600; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.35); transition: transform .25s; pointer-events: none; }
+.info-top.show { transform: translate(-50%, 0); }
+.tips-ai { margin: 0 0 10px; font-weight: 600; }
+.ai-note { margin: 12px 0 0; text-align: center; }
+.tut-btn { margin-left: auto; }
