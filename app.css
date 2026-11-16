@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.5 · Build 27 · 2026-11-16 */
+/*! Stagemate v0.4.7 · Build 29 · 2026-11-16 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1596,3 +1596,24 @@
   .sl-librow .sl-sub { white-space: normal; }
   #slAlbumField .field { margin-bottom: 8px; }
   .sl-sortbar select { width: auto; max-width: 100%; }
+
+  /* v0.4.6: Entwuerfe, Genre-Fenster, Sichtbarkeit */
+  .sl-genre { display: flex; gap: 8px; } .sl-genre input { flex: 1; min-width: 0; cursor: pointer; } .sl-genre .btn { flex: none; }
+  .sl-draft { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 2px 8px; border-radius: 999px; background: #6b7280; color: #fff; vertical-align: middle; }
+  #slGenreChips { margin-bottom: 12px; }
+  .sl-meta { grid-template-columns: 2fr 2fr 1fr 1fr 1fr; }
+  @media (max-width: 1000px) { .sl-meta { grid-template-columns: 1fr 1fr 1fr; } .sl-meta .field:nth-child(1), .sl-meta .field:nth-child(2) { grid-column: 1 / -1; } }
+  @media (max-width: 760px) { .sl-meta { grid-template-columns: 1fr 1fr; } }
+  .slc-vis { font-size: 12.5px; color: var(--muted); }
+  .slc-vis.pub { color: #15803d; font-weight: 600; }
+  .sl-librow button:disabled { opacity: .6; cursor: not-allowed; }
+
+/* v0.5.0 Timetable */
+.tt-items { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.tt-row { display: flex; gap: 12px; align-items: center; text-align: left; width: 100%; padding: 10px 12px; border: 1px solid var(--line, #2a2a2a); border-radius: 10px; background: var(--card, transparent); color: inherit; cursor: pointer; }
+.tt-time { font-weight: 700; min-width: 56px; font-variant-numeric: tabular-nums; }
+.tt-title { font-weight: 600; } .tt-note { font-size: 12.5px; color: var(--muted); }
+.tt-ov { margin: 6px 0; font-size: 13px; } .tt-ov-row { padding: 1px 0; white-space: pre-wrap; }
+.cal-foot-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+#calTT.on { background: var(--accent, #f5c518); color: #000; }
+.ev-plan.is-tt { border-style: dashed; }

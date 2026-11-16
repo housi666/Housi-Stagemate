@@ -1,16 +1,30 @@
-/*! Stagemate v0.4.5 · Build 27 · 2026-11-16 */
+/*! Stagemate v0.4.7 · Build 29 · 2026-11-16 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.5';
-const APP_BUILD = 27;
+const APP_VERSION = 'v0.4.7';
+const APP_BUILD = 29;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.7', date: '2026-11-16', items: [
+    { type: 'neu', text: 'Neue Registerkarte Timetable: Ablauf der Band pro Gig (Uhrzeit, Titel, Notiz), Eingabefenster zum Erfassen und Bearbeiten' },
+    { type: 'neu', text: 'Import per Textdatei (Zeile 16:00 Soundcheck) oder CSV (Uhrzeit;Titel;Notiz), auch per Einfügen; Export als Text oder CSV' },
+    { type: 'neu', text: 'Kalender Tagesansicht: Knopf Timetable blendet die Einträge des Gigs ein oder aus' },
+    { type: 'neu', text: 'Gigs: Knopf Timetable öffnet die Timetable des Gigs; Übersicht: neues Fenster mit der Timetable des nächsten Gigs' },
+    { type: 'neu', text: 'Rechte für Timetable einstellbar; Firestore-Regeln erweitert (timetables)' },
+  ] },
+  { version: 'v0.4.6', date: '2026-11-16', items: [
+    { type: 'neu', text: 'Neue Songs: in die Bibliothek aufnehmen, als Entwurf speichern (auch unvollständig) oder verwerfen' },
+    { type: 'neu', text: 'Entwürfe erscheinen in den Songs, lassen sich aber nicht in eine Setlist übernehmen' },
+    { type: 'neu', text: 'Genre wird in einem eigenen Fenster gewählt; vorgeschlagen werden alle Genres, die die Band verwendet' },
+    { type: 'neu', text: 'Setlist: Sichtbarkeit Intern oder Öffentlich (Standard Intern; Wirkung folgt später)' },
+    { type: 'intern', text: 'Testdaten: 10 Songs und 1 Setlist pro Band ohne Setlist' },
+  ] },
   { version: 'v0.4.5', date: '2026-11-16', items: [
     { type: 'neu', text: 'Setlist: Übersicht aller Setlists als Karten, Klick öffnet die Setlist mit ihren Songs' },
     { type: 'neu', text: 'Setlist: Sortierung nach Name, Gig-Datum, Dauer, Anzahl Songs oder zuletzt geändert' },
