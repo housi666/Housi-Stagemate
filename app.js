@@ -1,4 +1,4 @@
-/*! Stagemate v0.3.3 · Build 18 · 2026-11-16 */
+/*! Stagemate v0.3.5 · Build 20 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -1096,56 +1096,74 @@
       if (sw.parentElement !== $('page-settings')) $('page-settings').append(sw);
     }
   }
-  // ----- Persönliche Übersicht: Anzeigen (Widgets), verschiebbar und in der Breite änderbar -----
-  const HUB_DEFAULT = { order: ['bands', 'agenda', 'tasks', 'profile', 'settings'], wide: { bands: false, agenda: false, tasks: false, profile: true, settings: true } };
-  let hubLayout = clone(HUB_DEFAULT);
-  try { const sv = JSON.parse(ls.get('hubLayout') || 'null'); if (sv && Array.isArray(sv.order)) hubLayout = { order: sv.order, wide: { ...HUB_DEFAULT.wide, ...(sv.wide || {}) } }; } catch (e) {}
-  const saveHubLayout = () => { try { ls.set('hubLayout', JSON.stringify(hubLayout)); } catch (e) {} };
+  // ----- Persönliche Übersicht: Anzeigen (Widgets), je ein Drittel breit, verschiebbar (animiert) -----
+  const HUB_DEFAULT = ['bands', 'nextgig', 'agenda', 'tasks', 'profile', 'settings'];
+  let hubOrder = HUB_DEFAULT.slice();
+  try {
+    const sv = JSON.parse(ls.get('hubLayout') || 'null');
+    if (sv && Array.isArray(sv.order)) {
+      hubOrder = sv.order.filter(k => HUB_DEFAULT.includes(k));
+      // neue Anzeigen an ihrem Standardplatz einfügen
+      HUB_DEFAULT.forEach((k, i) => { if (!hubOrder.includes(k)) hubOrder.splice(Math.min(i, hubOrder.length), 0, k); });
+    }
+  } catch (e) {}
+  const saveHubLayout = () => { try { ls.set('hubLayout', JSON.stringify({ order: hubOrder })); } catch (e) {} };
   const hubSecs = () => [...$('hubGrid').querySelectorAll(':scope > .hub-sec')];
+  // FLIP-Animation: Positionen vorher merken, ändern, dann sanft an den neuen Platz gleiten
+  function hubAnimate(change, skip) {
+    const secs = hubSecs(), before = new Map(secs.map(s => [s, s.getBoundingClientRect()]));
+    change();
+    secs.forEach(s => {
+      if (s === skip) return;
+      const a = before.get(s), b = s.getBoundingClientRect(), dx = a.left - b.left, dy = a.top - b.top;
+      if (!dx && !dy) return;
+      s.style.transition = 'none'; s.style.transform = `translate(${dx}px, ${dy}px)`;
+      requestAnimationFrame(() => { requestAnimationFrame(() => { s.style.transition = 'transform .25s cubic-bezier(.2,.8,.2,1)'; s.style.transform = ''; }); });
+      clearTimeout(s._ht); s._ht = setTimeout(() => { s.style.transition = ''; }, 320);
+    });
+  }
   function applyHubLayout() {
     const grid = $('hubGrid'), map = {};
     hubSecs().forEach(sec => { map[sec.dataset.hub] = sec; });
-    const order = [...hubLayout.order.filter(k => map[k]), ...Object.keys(map).filter(k => !hubLayout.order.includes(k))];
-    order.forEach(k => { grid.append(map[k]); map[k].classList.toggle('wide', !!hubLayout.wide[k]); const w = map[k].querySelector('.hub-wide'); if (w) w.title = hubLayout.wide[k] ? 'Halbe Breite' : 'Ganze Breite'; });
+    hubOrder.forEach(k => { if (map[k]) grid.append(map[k]); });
   }
   hubSecs().forEach(sec => {
-    const k = sec.dataset.hub, old = sec.querySelector('.hub-head');
-    // Kopf: Griff zum Verschieben, Titel, Zähler, Breite
+    const old = sec.querySelector('.hub-head');
     const head = el('div', 'hub-head');
     const drag = el('span', 'hub-drag', '⠿'); drag.title = 'Anzeige verschieben (ziehen)'; drag.setAttribute('aria-label', 'Anzeige verschieben');
     const title = el('span', 'hub-title'); title.append(...old.childNodes);
-    const wide = el('button', 'hub-wide', '⇔'); wide.type = 'button';
-    wide.addEventListener('click', () => { hubLayout.wide[k] = !hubLayout.wide[k]; saveHubLayout(); applyHubLayout(); });
-    head.append(drag, title, wide); old.replaceWith(head);
-    sec.classList.remove('folded');
+    head.append(drag, title); old.replaceWith(head);
+    sec.classList.remove('folded', 'wide');
     drag.addEventListener('pointerdown', e => startHubDrag(e, sec));
   });
   applyHubLayout();
-  $('hubLayoutReset').addEventListener('click', () => { hubLayout = clone(HUB_DEFAULT); saveHubLayout(); applyHubLayout(); flash('Anordnung zurückgesetzt'); });
+  $('hubLayoutReset').addEventListener('click', () => { hubOrder = HUB_DEFAULT.slice(); saveHubLayout(); hubAnimate(applyHubLayout); flash('Anordnung zurückgesetzt'); });
   function startHubDrag(e, sec) {
     if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
     const grid = $('hubGrid');
     sec.classList.add('dragging'); document.body.classList.add('hub-dragging');
-    let lastY = e.clientY;
+    let busy = 0;
     const move = ev => {
       ev.preventDefault();
-      // am Rand automatisch scrollen
       const sc = $('app').querySelector('main') || document.scrollingElement;
       if (ev.clientY < 70) sc.scrollBy(0, -14); else if (ev.clientY > innerHeight - 50) sc.scrollBy(0, 14);
+      if (Date.now() - busy < 260) return;   // während eine Animation läuft, nicht erneut tauschen
       const under = document.elementFromPoint(ev.clientX, ev.clientY);
       const tgt = under && under.closest('.hub-sec');
       if (!tgt || tgt === sec || tgt.parentElement !== grid) return;
       const r = tgt.getBoundingClientRect();
-      const sameRow = Math.abs(r.top - sec.getBoundingClientRect().top) < 20 && !tgt.classList.contains('wide') && !sec.classList.contains('wide');
+      const sameRow = Math.abs(r.top - sec.getBoundingClientRect().top) < 20;
       const before = sameRow ? ev.clientX < r.left + r.width / 2 : ev.clientY < r.top + r.height / 2;
-      grid.insertBefore(sec, before ? tgt : tgt.nextSibling);
-      lastY = ev.clientY;
+      const ref = before ? tgt : tgt.nextSibling;
+      if (ref === sec || ref === sec.nextSibling) return;
+      busy = Date.now();
+      hubAnimate(() => grid.insertBefore(sec, ref));
     };
     const up = () => {
       document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up);
       sec.classList.remove('dragging'); document.body.classList.remove('hub-dragging');
-      hubLayout.order = hubSecs().map(x => x.dataset.hub); saveHubLayout();
+      hubOrder = hubSecs().map(x => x.dataset.hub); saveHubLayout();
     };
     document.addEventListener('pointermove', move, { passive: false });
     document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
@@ -1160,7 +1178,6 @@
     setAvatar($('homeAvatar'), profile.name, profile.photo);
     const h = $('homeHello'); h.innerHTML = ''; h.append('Hallo ', el('strong', null, profile.name), '!');
     const ids = bandIdsOf(profile);
-    $('hubBandCount').textContent = ids.length;
     const list = $('hubBandList'); list.innerHTML = '';
     if (!ids.length) list.append(el('div', 'mnote', 'Du bist noch in keiner Band. Tritt einer Band bei oder gründe eine.'));
     const sorted = [...ids].sort((a, c) => (a === profile.lastBand ? -1 : c === profile.lastBand ? 1 : (bands[a].name || '').localeCompare(bands[c].name || '', 'de')));
@@ -1207,18 +1224,41 @@
     });
   }
 
+  // ---- Persönliche Übersicht: dein nächster Gig (aus allen Bands, bis 1 Jahr voraus)
+  function renderNextGig(x, bandLabel) {
+    const box = $('hubNextGigBody'); box.innerHTML = '';
+    if (!x) { box.append(el('div', 'mnote', 'Kein Gig im nächsten Jahr eingetragen.')); return; }
+    const c = ovCfg(), ev = x.ev, today = dOnly(new Date());
+    const days = Math.round((dOnly(x.date) - today) / 864e5);
+    const card = el('div', 'ng-card');
+    const top = el('div', 'ng-top');
+    top.append(el('span', 'ng-count' + (days <= 7 ? ' soon' : ''), days === 0 ? 'Heute' : days === 1 ? 'Morgen' : `in ${days} Tagen`), bandLabel(x.band));
+    const title = el('div', 'ng-title', ev.title || 'Gig');
+    const when = el('div', 'ng-line', '🗓 ' + fmtDateOv(x.date, c.date) + (ev.allDay ? ' · ganztägig' : ' · ' + fmtHHMM(ev.start, c.time) + (ev.end ? '–' + fmtHHMM(ev.end, c.time) : '')));
+    card.append(top, title, when);
+    if (ev.location) card.append(el('div', 'ng-line', '📍 ' + ev.location + (ev.address ? ' · ' + ev.address : '')));
+    const sch = ev.schedule || {};
+    const plan = [['Get In', sch.getin], ['Soundcheck', sch.soundcheck], ['Linecheck', sch.linecheck]].filter(([, t]) => t);
+    if (plan.length) card.append(el('div', 'ng-line ng-plan', '⏱ ' + plan.map(([n, t]) => `${n} ${fmtHHMM(t, c.time)}`).join(' · ')));
+    const btn = el('button', 'btn small', 'Gig öffnen'); btn.type = 'button';
+    btn.addEventListener('click', () => { currentPage = 'page3'; gigsOpen.add(ev.id + '|' + dKey(x.date)); enterApp(x.band); setTimeout(() => scrollToCard('gigList', ev.id + '|' + dKey(x.date)), 300); });
+    const act = el('div', 'ng-act'); act.append(btn); card.append(act);
+    box.append(card);
+  }
+
   // ---- Persönliche Übersicht: Termine und Checklisten-Punkte aus allen Bands
   async function loadHubAgenda() {
     const ids = bandIdsOf(profile), today = dOnly(new Date()), until = addDays(today, 60);
     const ag = $('hubAgendaList'), tk = $('hubTaskList');
     ag.innerHTML = ''; tk.innerHTML = ''; ag.append(el('div', 'mnote', 'Wird geladen …'));
-    const events = [], tasks = [];
+    const events = [], tasks = [], gigs = [], gigUntil = addDays(today, 366);
     await Promise.all(ids.map(async id => {
       try {
         const snap = await db.collection(`calendar/${id}/events`).get();
         snap.docs.forEach(d => {
           const ev = { id: d.id, ...d.data() };
           if (ev.date && ev.kind !== 'checklist') occurrences(ev, today, until).forEach(dt => events.push({ band: id, ev, date: dt }));
+          if (ev.date && ev.kind !== 'checklist' && ev.category === 'auftritt') occurrences(ev, today, gigUntil).forEach(dt => gigs.push({ band: id, ev, date: dt }));
           // eigene, offene Checklisten-Punkte
           Object.entries(ev.checklists || {}).forEach(([dk, list]) => {
             const when = dk === '_' ? (ev.kind === 'checklist' && ev.date ? parseKey(ev.date) : null) : parseKey(dk);
@@ -1236,8 +1276,9 @@
     const c = ovCfg();
     const bandLabel = id => { const b = bands[id], wrap = el('span', 'ag-band'); wrap.append(b ? b.name : 'Band'); if (b && b.tag && showOf(b).tag) wrap.append(tagChip(b.tag)); return wrap; };
     events.sort((a, b) => a.date - b.date || (a.ev.start || '').localeCompare(b.ev.start || ''));
+    gigs.sort((a, b) => a.date - b.date || (a.ev.start || '').localeCompare(b.ev.start || ''));
+    renderNextGig(gigs[0], bandLabel);
     ag.innerHTML = '';
-    $('hubAgendaCount').textContent = events.length;
     if (!events.length) ag.append(el('div', 'mnote', 'Keine Termine in den nächsten 60 Tagen.'));
     events.slice(0, 40).forEach(x => {
       const row = el('button', 'ag-row'); row.type = 'button';
@@ -1249,7 +1290,6 @@
       ag.append(row);
     });
     tasks.sort((a, b) => (a.when ? a.when.getTime() : 8.64e15) - (b.when ? b.when.getTime() : 8.64e15));
-    $('hubTaskCount').textContent = tasks.length;
     if (!tasks.length) tk.append(el('div', 'mnote', 'Keine offenen Punkte – oder du hast noch keine übernommen.'));
     tasks.slice(0, 40).forEach(x => {
       const row = el('button', 'ag-row'); row.type = 'button';
@@ -4402,11 +4442,6 @@
     if (!profile) return;
     addBulb($('setPhotoPublic').closest('.share-row'), 'photo', 'Profilbild');
     addBulb(document.querySelector('#visPanel > .share-title'), 'share', 'E-Mail und Telefon');
-    document.querySelectorAll('.settings-wrap .panel > h3').forEach(h => {
-      const t = h.textContent.trim();
-      if (t.startsWith('Darstellung')) addBulb(h, 'theme', 'Darstellung');
-      if (t.startsWith('Mauszeiger')) addBulb(h, 'cursor', 'Mauszeiger');
-    });
     $('setPhotoPublic').checked = settingsDraft().photoPublic;
     $('visToTeam').classList.toggle('hidden', inHub || !currentBand);
   }
@@ -5383,10 +5418,10 @@
         T('💾', 'Speichern nicht vergessen', 'Änderungen gelten erst nach „Speichern“. Solange etwas offen ist, steht oben ein oranger Hinweis mit „Speichern“ und „Verwerfen“ – auch wenn du die Seite wechselst.', roles),
       ],
       overview: [
-        T('🟢', 'Mitglieder online', 'Unten in der Übersicht siehst du alle Mitglieder, getrennt nach Online und Offline. Sortieren nach 🔤 Name, 🎖 Rolle (Admin, Organisation, Checkliste, übrige) oder 🕒 Zeit (online seit / zuletzt online). Nochmals klicken oder ↑/↓ dreht die Reihenfolge.'),
+        T('🟢', 'Mitglieder online', 'Unten in der Übersicht siehst du alle Mitglieder, getrennt nach Online, Privat und Offline. Sortieren nach 🔤 Name, 🎖 Rolle (Admin, Organisation, Checkliste, übrige) oder 🕒 Zeit (online seit / zuletzt online). Nochmals klicken oder ↑/↓ dreht die Reihenfolge.'),
         T('🔢', 'Online-Anzeige', 'Unter dem Bandnamen oben links steht, wie viele Mitglieder gerade online sind. Ein Klick führt hierher.'),
         T('🏠', 'Übersicht', 'Hier siehst du auf einen Blick deine Band und deine Rollen.'),
-        T('🎸', 'Band wechseln', 'Oben in der Seitenleiste auf „Bands“ tippen – die Liste klappt auf. Wähle eine Band oder „+ Band beitreten oder gründen“.'),
+        T('🎸', 'Band wechseln', 'Unten links „Zurück zum Startbildschirm“ – auf der persönlichen Übersicht wählst du eine andere Band.'),
         T('🪟', 'Fenster', 'Die Übersicht zeigt Band, deine Rollen, Uhr & Datum, deinen nächsten Gig, deinen nächsten Termin und deinen nächsten Checklisten-Punkt (was du übernommen hast). Ein Klick auf den Knopf im Fenster springt direkt dorthin. Pack ein Fenster und zieh es an einen anderen Platz – auf dem Handy kurz gedrückt halten. Die Anordnung wird in deinem Profil gespeichert.'),
         T('⚙', 'Anpassen', 'Oben rechts „⚙ Anpassen“: Fenster ein- und ausschalten. Als Info stehen dort die Zeitzone und – wenn du ihn freigibst – dein Standort. Zeitformat, Uhr (digital oder analog) und Datumsformat stellst du in den Einstellungen unter „Uhr & Datum“ ein.'),
         T('🧭', 'Registerkarten', 'Kalender für alle Termine, Gigs für eure Auftritte mit allen Details, Checkliste für Aufgaben rund um Gigs und Termine, Finanzen für Einnahmen und Ausgaben, Verwaltung für Mitglieder, Rollen und Rechte.'),
@@ -5450,7 +5485,7 @@
         T('🖼️', 'Profilbild', 'Bild hinzufügen, ändern oder löschen. Es wird zugeschnitten und erst mit „Speichern“ übernommen. Ob andere es sehen, stellst du unter Einstellungen → Sichtbarkeit ein.'),
         T('👤', 'Persönliche Angaben', 'Nickname, Vorname, Nachname und Telefon. In der Web-Version fragt Stagemate beim Speichern nach deinem Passwort. Der Nickname muss eindeutig sein.'),
         T('🆔', 'PUID', 'Deine feste ID. „PUID anzeigen“ blendet sie ein, ein zweiter Klick wieder aus.'),
-        T('🔽', 'Bereiche zuklappen', 'Ein Klick auf „Persönliche Angaben“, „Deine Bands“ oder „Weitere Band hinzufügen“ klappt den Bereich zu oder auf. Oben gibt es „Alle aufklappen“ und „Alle zuklappen“.'),
+        T('🔽', 'Bereiche zuklappen', 'Ein Klick auf „Persönliche Angaben“ oder „Weitere Band hinzufügen“ klappt den Bereich zu oder auf.'),
         T('👁', 'Sichtbarkeit', '„Sichtbarkeitseinstellungen“ unten im Profil führt direkt zu allen Sichtbarkeiten in den Einstellungen.'),
         T('📜', 'Rechtliches', 'Nutzungsbedingungen und Datenschutzerklärung findest du unten im Profil und in den Einstellungen.'),
         T('🔐', 'Konto', 'Web-Version: Passwort ändern oder Konto löschen. Gründer/Admins lösen vorher ihre Band auf.'),
@@ -5459,15 +5494,16 @@
         T('💾', 'Speichern', 'Offene Änderungen zeigt der orange Hinweis oben – dort kannst du speichern oder verwerfen.'),
       ],
       home: [
-        T('🏠', 'Startbildschirm', 'Hier landest du nach dem Anmelden: deine Bands, dein Profil und deine Einstellungen auf einem Bildschirm.'),
-        T('🎸', 'Band öffnen', 'Klick auf eine Band öffnet sie. Die zuletzt geöffnete steht zuoberst. Logo, Name und Tag erscheinen so, wie die Band es eingestellt hat.'),
-        T('🔽', 'Aufklappen', '„Deine Bands“, „Profil“ und „Einstellungen“ lassen sich einzeln auf- und zuklappen – oder oben alle auf einmal.'),
-        T('➕', 'Weitere Band', '„+ Band beitreten oder gründen“ öffnet im Profil den passenden Bereich.'),
+        T('🏠', 'Persönliche Übersicht', 'Hier landest du nach dem Anmelden. Sie gehört nur dir: keine Seitenleiste, keine Band. Oben die Kopfzeile mit Uhr, Tipps, Support und Abmelden.'),
+        T('🎸', 'Band öffnen', 'Die Bandseite öffnest du nur hier: Klick auf eine Band unter „Deine Bands“. Die zuletzt geöffnete steht zuoberst.'),
+        T('🧩', 'Anzeigen verschieben', 'Jede Anzeige (Bands, nächster Gig, Termine, Checklisten-Punkte, Profil, Einstellungen) hat links oben einen Griff ⠿. Packen und an einen anderen Platz ziehen – die anderen rücken sanft nach. Die Anordnung bleibt in diesem Browser gespeichert; „Anordnung zurücksetzen“ stellt die Grundaufteilung wieder her.'),
+        T('🎤', 'Dein nächster Gig', 'Zeigt den nächsten Gig aus allen deinen Bands (bis ein Jahr voraus) mit Countdown, Ort und Zeitplan. „Gig öffnen“ springt direkt zum Gig in der Band.'),
         T('📅', 'Deine Termine', '„Deine nächsten Termine“ zeigt Gigs und Termine aller deiner Bands der nächsten 60 Tage. Ein Klick öffnet den Termin in der Band.'),
         T('☑️', 'Deine Checklisten-Punkte', 'Alle offenen Punkte, die du in irgendeiner Band übernommen hast – mit Band, was und wann.'),
-        T('🔍', 'Band suchen', '„Band suchen“ findet Bands nach Name oder Tag (sofern die Band sie sichtbar zeigt). Beitreten geht mit dem Einladungscode vom Admin.'),
-        T('🗂️', 'Registerkarten', 'Auch hier stehen die Registerkarten links. Ein Klick öffnet sie in deiner zuletzt geöffneten Band. Mit „Registerkarten ▾“ klappst du die Liste zu oder auf.'),
-        T('↩️', 'Zurück hierher', 'In einer Band führt „Zurück zum Startbildschirm“ unten links wieder hierher. So wechselst du die Band.'),
+        T('➕', 'Band beitreten, gründen, suchen', 'Unter „Deine Bands“: „Band beitreten“ mit Code, „Band gründen“ oder „Band suchen“ nach Name oder Tag.'),
+        T('🟣', 'Dein Status', 'Oben rechts wählst du deinen Status: Automatisch (hier Privat, auf der Bandseite Online), Online, Privat oder Offline. Hier auf der Übersicht bist du in keiner Band online.'),
+        T('👤', 'Profil und Einstellungen', 'Gibt es nur hier auf der persönlichen Übersicht – nicht auf der Bandseite.'),
+        T('↩️', 'Zurück hierher', 'Auf einer Bandseite führt „Zurück zum Startbildschirm“ unten links wieder hierher. So wechselst du die Band.'),
       ],
       settings: [
         T('🔽', 'Fenster zuklappen', 'Ein Klick auf den Titel eines Bereichs klappt ihn zu oder auf. Oben rechts gibt es „Alle aufklappen“ und „Alle zuklappen“. Der Zustand bleibt in diesem Browser gespeichert.'),
@@ -5513,22 +5549,23 @@
       { icon: '🗂️', title: 'Registerkarten zuklappen', text: 'Über den Registerkarten steht „Registerkarten ▾“ – ein Klick klappt die Liste zu oder auf. Der Zustand bleibt in diesem Browser gespeichert.' },
       { icon: '↕️', title: 'Registerkarten sortieren', text: 'Halte eine Registerkarte in der Seitenleiste gedrückt und ziehe sie an die gewünschte Stelle. Die Reihenfolge wird in deinem Profil gespeichert.' },
       { icon: '🎸', title: 'Band wechseln', text: 'Unten links „Zurück zum Startbildschirm“ – dort wählst du eine andere Band, trittst einer weiteren bei oder gründest eine.' },
-      { icon: '🕒', title: 'Uhr und Datum', text: 'Oben links unter dem Bandnamen laufen Uhr und Datum (tt.mm.jj, mm.tt.jj oder jj.mm.tt). Format und Uhr (digital oder analog) stellst du unter Einstellungen → Uhr & Datum ein.' },
+      { icon: '🕒', title: 'Uhr und Datum', text: 'Auf der Bandseite oben links unter dem Bandnamen, auf der persönlichen Übersicht in der Kopfzeile laufen Uhr und Datum (tt.mm.jj, mm.tt.jj oder jj.mm.tt). Format und Uhr (digital oder analog) stellst du unter Einstellungen → Uhr & Datum ein.' },
       { icon: '🟢', title: 'Online-Anzeige', text: 'Unter dem Bandnamen steht, wie viele Mitglieder gerade online sind. Ein Klick öffnet die Übersicht mit allen Mitgliedern.' },
       { icon: '◀️', title: 'Seitenleiste einklappen', text: 'Ganz unten „Einklappen“ – dann bleiben nur die Symbole sichtbar.' },
       { icon: '📱', title: 'Auf dem Handy', text: 'Vom linken Rand nach rechts wischen öffnet die Seitenleiste, nach links wischen oder daneben tippen schliesst sie. Solange sie offen ist, ist der Rest gesperrt.' },
-      { icon: '💡', title: 'Tipps', text: 'Dieser Knopf unten links zeigt immer die Tipps zur Seite, auf der du gerade bist. Beim Öffnen der App blinkt er kurz zur Erinnerung.' },
-      { icon: '⚙️', title: 'Einstellungen', text: 'Unten links: Darstellung (Hell, Dunkel, Automatisch), Mauszeiger, Uhr & Datum, Sichtbarkeit und die Sortierung der Checkliste.' },
+      { icon: '💡', title: 'Tipps', text: 'Der Knopf „Tipps“ (auf der Bandseite unten links, auf der persönlichen Übersicht oben in der Kopfzeile) zeigt immer die Tipps zur Seite, auf der du gerade bist.' },
+      { icon: '⚙️', title: 'Einstellungen', text: 'Auf der persönlichen Übersicht: Darstellung (Hell, Dunkel, Automatisch), Mauszeiger, Uhr & Datum, Sichtbarkeit und die Sortierung der Checkliste.' },
+      { icon: '🟣', title: 'Status', text: 'Oben rechts: Automatisch (Übersicht = Privat, Bandseite = Online), Online, Privat oder Offline. Bei „Offline“ sehen dich deine Bands als offline.' },
       { icon: '🚧', title: 'Alpha', text: 'Stagemate ist in der Alpha-Phase und verändert sich laufend. Geplant: Beta ab 0.5.0, Prerelease ab 0.9.0, Release mit 1.0.0. Die Versionsnummer steht ganz unten links; der Hinweis erscheint auf dem Anmeldebildschirm und lässt sich über das Abzeichen „Alpha“ wieder öffnen.' },
-      { icon: '💡', title: 'Vorschau', text: 'Neben optischen Einstellungen steht eine kleine Glühbirne. Darüberfahren oder antippen zeigt eine kleine Vorschau, wie es aussehen wird.' },
+      { icon: '💡', title: 'Vorschau', text: 'Bei Uhr & Datum, Profilbild, Kontaktangaben, Band-Sichtbarkeit und Band-Tag steht eine kleine Glühbirne. Darüberfahren oder antippen zeigt, wie es aussehen wird.' },
       { icon: '⏪', title: 'Vor und Zurück', text: 'Oben links neben dem Seitentitel: ‹ führt zur vorherigen Seite, › wieder vorwärts – wie im Browser.' },
       { icon: '💬', title: 'Support', text: 'Unten links „Support“ öffnet ein Fenster mit den Links zu Instagram und TikTok (housi_666) – für Fragen, Probleme oder Ideen.' },
       { icon: '🔍', title: 'Bilder gross ansehen', text: 'Ein Klick auf ein Profilbild oder Bandlogo zeigt es gross an. Verborgene Bilder sind verschwommen und mit einem Schloss markiert.' },
       { icon: '🙈', title: 'Profilbild verbergen', text: 'Unter Einstellungen → Sichtbarkeit „Profilbild für andere sichtbar“ ausschalten. Andere sehen dann nur noch ein verschwommenes Bild mit Schloss.' },
       { icon: '🚧', title: 'Finanzen', text: 'Die Finanzen befinden sich im Bau. Du kannst dich umsehen, die Funktionen sind aber noch gesperrt.' },
-      { icon: '🏠', title: 'Startbildschirm', text: 'Nach dem Anmelden siehst du deine Bands mit Logo, Tag und deinen Rollen sowie dein Profil und deine Einstellungen. Ein Klick auf eine Band öffnet sie.' },
+      { icon: '🏠', title: 'Ablauf', text: 'Anmelden → persönliche Übersicht → Band wählen → Bandseite. Über „Zurück zum Startbildschirm“ kommst du wieder auf die Übersicht.' },
       { icon: '👁', title: 'Passwort ansehen', text: 'Das Auge im Passwortfeld gedrückt halten – solange du drückst, siehst du das Passwort im Klartext.' },
-      { icon: '🔐', title: 'Konto', text: 'Web-Version: Unter „Profil & Bands“ → „Konto“ änderst du dein Passwort oder löschst dein Konto. Gründer/Admins lösen vorher ihre Band auf.' },
+      { icon: '🔐', title: 'Konto', text: 'Web-Version: Auf der persönlichen Übersicht unter „Profil“ → „Konto“ änderst du dein Passwort oder löschst dein Konto. Gründer/Admins lösen vorher ihre Band auf.' },
       { icon: '📜', title: 'Nutzungsbedingungen & Datenschutz', text: 'Findest du im Profil, in den Einstellungen, auf der Anmeldeseite und im Support-Fenster. Bei einer neuen Fassung musst du sie beim nächsten Anmelden erneut akzeptieren.' },
     ];
     cat('Allgemein', '💡', general, false);
@@ -5627,7 +5664,7 @@
   // Web-Version: eigene Firebase-Sitzung. Die ID wird zur E-Mail (housi:666 -> housi666@stagemate.dev);
   //   Zugriff auf alle Daten nur, wenn developers/<uid> in Firestore existiert (Firestore-Regeln).
   // Claude-/Lokal-Version: nur eigene Testdaten; Prüfung über eine SHA-256-Prüfsumme (kein Klartext im Code).
-  const DEV_HASH = '3423fa80ec754fc0646d8a962a0fcb072bfb8f964544e1373a5e7856e14a01be';
+  const DEV_HASH = 'bc0ee41a421c6d279aefe913311d765b172d7a1fb60e314023e6744e1a298d4c';
   const devEmail = id => String(id || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '') + '@stagemate.dev';
   let devDb = null, devData = null, devTab = 'bands';
   async function sha256(t) {
@@ -5643,6 +5680,7 @@
   $('devBtn').addEventListener('click', () => { $('devModal').classList.remove('hidden'); setMsg($('devMsg'), ''); $('devPw').value = ''; setTimeout(() => $('devId').focus(), 30); });
   ['devX', 'devCancel'].forEach(k => $(k).addEventListener('click', closeDevModal));
   $('devModal').addEventListener('click', e => { if (e.target === $('devModal')) closeDevModal(); });
+  $('devId').addEventListener('input', () => { $('devMailHint').textContent = Data.usesFirebase && $('devId').value.trim() ? 'Firebase-Konto: ' + devEmail($('devId').value) : ''; });
   $('devPw').addEventListener('keydown', e => { if (e.key === 'Enter') $('devGo').click(); });
   $('devGo').addEventListener('click', async () => {
     const id = $('devId').value.trim(), pw = $('devPw').value;
@@ -5651,7 +5689,15 @@
     try {
       if (Data.usesFirebase) {   // Web-Version – gilt auch auf der Anmeldeseite, bevor das eigene Konto verbunden ist
         const r = await Data.devSignIn(devEmail(id), pw);
-        if (!r.ok) return setMsg($('devMsg'), r.error + (r.uid ? ` (UID: ${r.uid})` : ''), 'error');
+        if (!r.ok) {
+          const mail = devEmail(id);
+          let t = r.error;
+          if (r.uid) t = `Anmeldung bei Firebase ok, aber das Konto ist nicht als Entwickler freigegeben. Lege in Firestore die Sammlung „developers“ mit einem Dokument an, dessen ID genau diese UID ist: ${r.uid}`;
+          else if (['auth/invalid-credential', 'auth/invalid-login-credentials', 'auth/user-not-found', 'auth/wrong-password'].includes(r.code))
+            t = `Firebase kennt das Konto ${mail} nicht oder das Passwort ist anders. Prüfe in der Firebase-Konsole unter Authentication, ob es genau dieses Konto gibt (sonst „Nutzer hinzufügen“), oder setze dort das Passwort neu.`;
+          else if (r.code === 'auth/user-disabled') t = `Das Konto ${mail} ist in Firebase deaktiviert.`;
+          return setMsg($('devMsg'), t + (r.code ? ` [${r.code}]` : ''), 'error');
+        }
         devDb = r.db; devUid = r.uid; $('devWho').textContent = `${devEmail(id)} · Firebase`;
       } else {
         if (await sha256(id + '|' + pw) !== DEV_HASH) return setMsg($('devMsg'), 'ID oder Passwort stimmt nicht.', 'error');
