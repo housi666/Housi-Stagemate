@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.7 · Build 29 · 2026-11-16 */
+/*! Stagemate v0.4.8 · Build 30 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -2184,7 +2184,7 @@
       else {
         card.append(el('div', 'ov-title', g.title || 'Gig'), el('div', 'ov-when', fmtDateOv(parseKey(g.date), c.date)));
         const ul = el('div', 'tt-ov');
-        ttEntries(g.id).slice(0, 5).forEach(x => ul.append(el('div', 'tt-ov-row', fmtHHMM(x.time, c.time) + '  ' + x.title)));
+        ttEntries(g.id).slice(0, 5).forEach(x => ul.append(el('div', 'tt-ov-row', fmtHHMM(x.time, c.time) + '  ' + ttName(x))));
         card.append(ul);
         const b = el('button', 'btn small ghost', 'Zur Timetable →'); b.type = 'button';
         b.addEventListener('click', () => { ttSel = g.id; showPage('page8'); });
@@ -2366,7 +2366,7 @@
   };
   const SL_REL = { album: 'Album', ep: 'EP', single: 'Single' };
   const SL_GENRES = ['Rock', 'Pop', 'Punk', 'Metal', 'Blues', 'Jazz', 'Folk', 'Funk', 'Soul', 'Reggae', 'Country', 'Hip-Hop', 'Electronic', 'Schlager', 'Klassik'];
-  let slPend = null, slLists = [], slSongs = [], slBand = null, slUnsubL = null, slUnsubS = null, slSel = null, slView = 'list', slCtx = null, slSaveT = null;
+  let slJump = null, slPend = null, slLists = [], slSongs = [], slBand = null, slUnsubL = null, slUnsubS = null, slSel = null, slView = 'list', slCtx = null, slSaveT = null;
   let slSort = { by: 'name', dir: 1 }, songSort = { by: 'title', dir: 1 };
   try { const v = JSON.parse(ls.get('slSort') || 'null'); if (v && v.by) slSort = v; const w = JSON.parse(ls.get('songSort') || 'null'); if (w && w.by) songSort = w; } catch (e) {}
   const slCan = () => levelFor(currentBand, 'page6') === 'edit' && !viewAs;
@@ -2391,14 +2391,14 @@
     try { slSel = ls.get('slSel_' + currentBand) || null; } catch (e) { slSel = null; }
     const cL = db.collection(`setlists/${currentBand}/lists`), cS = db.collection(`songs/${currentBand}/items`);
     const bandAtStart = currentBand;
-    const aL = snap => { if (slBand !== bandAtStart) return; const keep = slPend && slLists.find(x => x.id === slPend); slLists = snap.docs.map(d => (keep && d.id === slPend ? keep : { id: d.id, ...d.data() })); if (currentPage === 'page6' && !slBusy()) renderSetlist(); };
+    const aL = snap => { if (slBand !== bandAtStart) return; const keep = slPend && slLists.find(x => x.id === slPend); slLists = snap.docs.map(d => (keep && d.id === slPend ? keep : { id: d.id, ...d.data() })); slLists.forEach(l => { if (!Array.isArray(l.items)) l.items = []; }); if (currentPage === 'page6' && !slBusy()) renderSetlist(); else if (currentPage === 'page3') renderGigs(); };
     const aS = snap => { if (slBand !== bandAtStart) return; slSongs = snap.docs.map(d => ({ id: d.id, ...d.data() })); if (currentPage === 'page7') renderSongs(); if (!$('slLibModal').classList.contains('hidden')) renderSlLib(); };
     try { slUnsubL = cL.onSnapshot ? cL.onSnapshot(aL) : null; } catch (e) { slUnsubL = null; }
     if (!slUnsubL) cL.get().then(aL).catch(() => {});
     try { slUnsubS = cS.onSnapshot ? cS.onSnapshot(aS) : null; } catch (e) { slUnsubS = null; }
     if (!slUnsubS) cS.get().then(aS).catch(() => {});
   }
-  function openSetlist() { slSub(); slView = 'list'; renderSetlist(); }
+  function openSetlist() { slSub(); if (slJump) { slSel = slJump; slView = 'edit'; slJump = null; } else slView = 'list'; renderSetlist(); }
   function openSongs() { slSub(); renderSongs(); }
   const slBusy = () => { const a = document.activeElement; return !!(a && a.closest && a.closest('#slEditor') && /INPUT|TEXTAREA|SELECT/.test(a.tagName)); };
   function slSave(L) {
@@ -2731,6 +2731,9 @@
   const ttCan = () => levelFor(currentBand, 'page8') === 'edit' && !viewAs;
   const ttDeny = () => previewBlocked(null, viewAs ? undefined : 'Keine Berechtigung: Du hast für die Timetable nur Leserechte. Bitte den Admin, dir das Recht „Bearbeiten“ zu geben.');
   const ttCalOn = () => { try { return ls.get('ttCal') !== '0'; } catch (e) { return true; } };
+  const ttName = x => (x.band || x.title || '').trim();
+  const ttEnd = (x, nextT) => x.end && /^\d\d:\d\d$/.test(x.end) ? toMin(x.end) : (+x.dur > 0 ? toMin(x.time) + +x.dur : (nextT != null ? toMin(nextT) : toMin(x.time) + 30));
+  const ttSetName = x => { const l = x.setlistId && slLists.find(y => y.id === x.setlistId); return l ? (l.name || 'Setlist') : ''; };
   const ttEntries = id => ((ttMap[id] || {}).entries || []).filter(x => /^\d\d:\d\d$/.test(x.time || '')).sort((a, b) => a.time.localeCompare(b.time));
   function ttSub() {
     if (ttBand === currentBand) return;
@@ -2777,7 +2780,11 @@
     const c = ovCfg();
     ttEntries(ttSel).forEach(x => {
       const row = el('button', 'tt-row'); row.type = 'button';
-      const m = el('div', 'tt-main'); m.append(el('div', 'tt-title', x.title)); if (x.note) m.append(el('div', 'tt-note', x.note));
+      const m = el('div', 'tt-main'); m.append(el('div', 'tt-title', ttName(x)));
+      const sub = [x.end ? 'bis ' + fmtHHMM(x.end, c.time) : (+x.dur > 0 ? x.dur + ' Min.' : ''), +x.songs > 0 ? x.songs + ' Songs' : '', x.note].filter(Boolean).join(' · ');
+      if (sub) m.append(el('div', 'tt-note', sub));
+      const sn = ttSetName(x);
+      if (sn) { const lk = el('span', 'tt-setlink', '🎼 ' + sn); lk.title = 'Zur Setlist'; lk.addEventListener('click', e => { e.stopPropagation(); slJump = x.setlistId; showPage('page6'); }); m.append(lk); }
       row.append(el('div', 'tt-time', fmtHHMM(x.time, c.time)), m);
       row.addEventListener('click', () => ttOpen(x));
       box.appendChild(row);
@@ -2787,28 +2794,34 @@
     if (!ttCan()) return ttDeny();
     ttEdit = x || null;
     $('ttH').textContent = x ? 'Eintrag bearbeiten' : 'Neuer Eintrag';
-    $('ttTime').value = x ? x.time : ''; $('ttTitle').value = x ? x.title : ''; $('ttNote').value = x ? (x.note || '') : '';
+    slSub();
+    const ss = $('ttSet'); ss.innerHTML = ''; ss.appendChild(new Option('– keine –', ''));
+    slLists.forEach(l => ss.appendChild(new Option(l.name || 'Setlist', l.id)));
+    $('ttTime').value = x ? x.time : ''; $('ttTitle').value = x ? ttName(x) : ''; $('ttNote').value = x ? (x.note || '') : '';
+    $('ttEnd').value = x ? (x.end || '') : ''; $('ttDur').value = x && +x.dur > 0 ? x.dur : ''; $('ttSongs').value = x && +x.songs > 0 ? x.songs : ''; ss.value = x ? (x.setlistId || '') : '';
     $('ttDel').classList.toggle('hidden', !x); $('ttMsg').textContent = '';
-    $('ttModal').classList.remove('hidden'); setTimeout(() => $(x ? 'ttTitle' : 'ttTime').focus(), 60);
+    $('ttModal').classList.remove('hidden'); setTimeout(() => $('ttTitle').focus(), 60);
   }
   const ttClose = () => $('ttModal').classList.add('hidden');
   $('ttGig').addEventListener('change', () => { ttSel = $('ttGig').value; renderTimetable(); });
   $('ttAdd').addEventListener('click', () => ttOpen(null));
   $('ttClose').addEventListener('click', ttClose); $('ttCancel').addEventListener('click', ttClose);
   $('ttSave').addEventListener('click', () => {
-    const time = $('ttTime').value, title = $('ttTitle').value.trim();
-    if (!/^\d\d:\d\d$/.test(time)) { $('ttMsg').textContent = 'Bitte eine Uhrzeit angeben.'; return; }
-    if (!title) { $('ttMsg').textContent = 'Bitte einen Titel angeben.'; return; }
+    const time = $('ttTime').value, band = $('ttTitle').value.trim();
+    if (!band) { $('ttMsg').textContent = 'Bitte den Bandnamen angeben (Pflicht).'; return; }
+    if (!/^\d\d:\d\d$/.test(time)) { $('ttMsg').textContent = 'Bitte die Startzeit angeben (Pflicht).'; return; }
+    const end = $('ttEnd').value, dur = Math.max(0, parseInt($('ttDur').value, 10) || 0), songs = Math.max(0, parseInt($('ttSongs').value, 10) || 0);
+    const f = { time, band, end: end || '', dur: end ? 0 : dur, songs, setlistId: $('ttSet').value || '', note: $('ttNote').value.trim() };
     const L = ttList(ttSel);
-    if (ttEdit) { const x = L.entries.find(e => e.id === ttEdit.id); if (x) { x.time = time; x.title = title; x.note = $('ttNote').value.trim(); } }
-    else L.entries.push({ id: slId(), time, title, note: $('ttNote').value.trim() });
+    if (ttEdit) { const x = L.entries.find(e => e.id === ttEdit.id); if (x) { Object.assign(x, f); delete x.title; } }
+    else L.entries.push({ id: slId(), ...f });
     ttSave(ttSel); ttClose(); renderTimetable();
   });
   $('ttDel').addEventListener('click', () => {
     if (!ttEdit || !confirm('Eintrag löschen?')) return;
     const L = ttList(ttSel); L.entries = L.entries.filter(e => e.id !== ttEdit.id); ttSave(ttSel); ttClose(); renderTimetable();
   });
-  // Import: Text („16:00 Soundcheck“) oder CSV (Uhrzeit;Titel;Notiz)
+  // Import: Text („19:00 - 19:45 Bandname“) oder CSV (Uhrzeit;Band;Ende;Dauer;Songs;Notiz)
   function csvSplit(line, sep) {
     const out = []; let cur = '', q = false;
     for (let i = 0; i < line.length; i++) {
@@ -2821,15 +2834,17 @@
   const ttNorm = (h, m) => { h = +h; m = +m; return h > 23 || m > 59 ? null : pad2(h) + ':' + pad2(m); };
   function ttParse(text) {
     const res = []; let bad = 0;
+    // CSV-Spalten: Uhrzeit;Band;Ende;Dauer (Min.);Songs;Notiz
     String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).forEach(raw => {
       const line = raw.trim(); if (!line) return;
       let m = line.match(/^"?(\d{1,2})[:.](\d{2})"?\s*([;\t,])(.*)$/);
       if (m) {
-        const t = ttNorm(m[1], m[2]), cells = csvSplit(m[4], m[3]);
-        if (t && cells[0]) return res.push({ time: t, title: cells[0], note: cells.slice(1).join(' ').trim() });
+        const t = ttNorm(m[1], m[2]), c = csvSplit(m[4], m[3]);
+        const e = (c[1] || '').match(/^(\d{1,2})[:.](\d{2})$/);
+        if (t && c[0]) return res.push({ time: t, band: c[0], end: e ? ttNorm(e[1], e[2]) || '' : '', dur: e ? 0 : (parseInt(c[2], 10) || 0), songs: parseInt(c[3], 10) || 0, note: (c[4] || '').trim() });
       }
-      m = line.match(/^(\d{1,2})[:.](\d{2})(?:\s*[-–]\s*\d{1,2}[:.]\d{2})?\s*(?:Uhr)?\s*[-–:]?\s*(.+)$/);
-      if (m) { const t = ttNorm(m[1], m[2]); if (t) return res.push({ time: t, title: m[3].trim(), note: '' }); }
+      m = line.match(/^(\d{1,2})[:.](\d{2})(?:\s*[-–]\s*(\d{1,2})[:.](\d{2}))?\s*(?:Uhr)?\s*[-–:]?\s*(.+)$/);
+      if (m) { const t = ttNorm(m[1], m[2]); if (t) return res.push({ time: t, band: m[5].trim(), end: m[3] ? ttNorm(m[3], m[4]) || '' : '', dur: 0, songs: 0, note: '' }); }
       if (res.length || !/uhrzeit|zeit|time/i.test(line)) bad++;   // Kopfzeile still überspringen
     });
     return { res, bad };
@@ -2846,15 +2861,15 @@
     if (!res.length) { $('ttImpMsg').textContent = 'Keine Zeilen mit Uhrzeit gefunden. Beispiel: 16:00 Soundcheck'; return; }
     const L = ttList(ttSel);
     if ($('ttImpMode').value === 'replace') L.entries = [];
-    res.forEach(x => L.entries.push({ id: slId(), ...x }));
+    res.forEach(x => L.entries.push({ id: slId(), setlistId: '', ...x }));
     ttSave(ttSel); ttImpClose(); renderTimetable();
     flash(res.length + ' Einträge übernommen' + (bad ? `, ${bad} Zeilen übersprungen` : ''));
   });
   document.querySelectorAll('[data-ttx]').forEach(b => b.addEventListener('click', () => {
     if (!ttSel) return; const g = calEvents.find(e => e.id === ttSel) || {}, kind = b.dataset.ttx, list = ttEntries(ttSel);
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const txt = kind === 'csv' ? '\uFEFF' + ['Uhrzeit', 'Titel', 'Notiz'].map(q).join(';') + '\r\n' + list.map(x => [x.time, x.title, x.note].map(q).join(';')).join('\r\n')
-      : list.map(x => `${x.time} ${x.title}${x.note ? ' – ' + x.note : ''}`).join('\r\n');
+    const txt = kind === 'csv' ? '\uFEFF' + ['Uhrzeit', 'Band', 'Ende', 'Dauer (Min.)', 'Songs', 'Notiz'].map(q).join(';') + '\r\n' + list.map(x => [x.time, ttName(x), x.end || '', x.dur || '', x.songs || '', x.note].map(q).join(';')).join('\r\n')
+      : list.map(x => `${x.time}${x.end ? ' - ' + x.end : ''} ${ttName(x)}${x.songs ? ' (' + x.songs + ' Songs)' : ''}${x.note ? ' – ' + x.note : ''}`).join('\r\n');
     const safe = ('Timetable ' + (g.title || '')).replace(/[^\wäöüÄÖÜ -]+/g, '').trim() || 'Timetable';
     const url = URL.createObjectURL(new Blob([txt], { type: (kind === 'csv' ? 'text/csv' : 'text/plain') + ';charset=utf-8' }));
     const a = document.createElement('a'); a.href = url; a.download = safe + '.' + (kind === 'csv' ? 'csv' : 'txt'); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -4074,7 +4089,7 @@
       const g = grp(it);
       if (it.ev.category === 'auftritt' && it.ev.kind !== 'checklist' && ttCalOn()) {
         const tl = ttEntries(it.ev.id);
-        tl.forEach((x, i) => { const a = toMin(x.time), nx = tl[i + 1] ? toMin(tl[i + 1].time) : a + 30; g.blocks.push({ it, a, b: Math.max(nx, a + 15), label: x.title, plan: true, isGig: false, tt: true }); });
+        tl.forEach((x, i) => { const a = toMin(x.time), e = ttEnd(x, tl[i + 1] && tl[i + 1].time); const sub = [x.end ? 'bis ' + x.end : (+x.dur > 0 ? x.dur + ' Min.' : ''), +x.songs > 0 ? x.songs + ' Songs' : '', ttSetName(x) ? '🎼 ' + ttSetName(x) : ''].filter(Boolean).join(' · '); g.blocks.push({ it, a, b: Math.max(e, a + 15), label: ttName(x), plan: true, isGig: false, tt: true, sub }); });
       }
       if (it.ev.category === 'auftritt' && it.ev.kind !== 'checklist') {
         const plan = gigPlanBlocks(it.ev);
@@ -4133,7 +4148,7 @@
           chip.style.setProperty('--c', g.cat.color);
           const tl = el('span', 'ev-t'); tl.append(el('b', 'ev-pt', fmt(t.a)), ' ' + t.label + ' · ' + (t.it.ev.title || 'Gig'));
           chip.append(tl);
-          chip.append(el('span', 'ev-time', (t.tt ? '⏱ Timetable' : (t.isGig && t.it.ev.end ? 'bis ' + t.it.ev.end : '')) + (!t.tt && t.it.ev.location ? (t.isGig && t.it.ev.end ? ' · ' : '') + t.it.ev.location : '')));
+          chip.append(el('span', 'ev-time', (t.tt ? (t.sub || '⏱ Timetable') : (t.isGig && t.it.ev.end ? 'bis ' + t.it.ev.end : '')) + (!t.tt && t.it.ev.location ? (t.isGig && t.it.ev.end ? ' · ' : '') + t.it.ev.location : '')));
           chip.title = `${t.label} – ${t.it.ev.title || ''}`;
           chip.addEventListener('click', e => { e.stopPropagation(); openEventModal({ ev: t.it.ev, occ: t.it.date }); });
         } else {
@@ -5989,6 +6004,18 @@
         if (viewAs) return;
         openClNew({ opt: clnPerm('gigAssign') ? null : 'gigAssign', evId: ev.id });
       });
+      slSub();
+      const linkedSl = slLists.find(l => l.gigId === ev.id), slHid = levelFor(currentBand, 'page6') === 'hidden';
+      const sb = el('button', 'btn small ghost' + (!linkedSl || slHid ? ' pv-locked' : ''), '🎼 Zur Setlist'); sb.type = 'button';
+      sb.addEventListener('click', e => {
+        if (slHid) return previewBlocked(e, 'Keine Berechtigung: Die Registerkarte „Setlist“ ist für dich ausgeblendet. Bitte den Admin um Zugriff.');
+        if (!linkedSl) return previewBlocked(e, 'Noch keine Setlist verknüpft. Weise zuerst im Reiter „Setlist“ dieser Setlist den Gig zu.');
+        slJump = linkedSl.id; showPage('page6');
+      });
+      if (!linkedSl) {
+        const warn = el('div', 'gig-msg-red', 'Noch keine Setlist verknüpft'), hint = el('div', 'note-info', 'Weise zuerst im Reiter „Setlist“ eine Setlist hinzu.');
+        body.prepend(hint); body.prepend(warn);
+      }
       ttSub();
       const nTT = (ttMap[ev.id] || { entries: [] }).entries.length, ttHid = levelFor(currentBand, 'page8') === 'hidden';
       const tt = el('button', 'btn small ghost' + (ttHid ? ' pv-locked' : ''), '⏱ Timetable' + (nTT ? ` (${nTT})` : '')); tt.type = 'button';
@@ -5996,7 +6023,7 @@
         if (ttHid) return previewBlocked(e, 'Keine Berechtigung: Die Registerkarte „Timetable“ ist für dich ausgeblendet. Bitte den Admin um Zugriff.');
         ttSel = ev.id; showPage('page8');
       });
-      actions.append(cal, tt, cl, edit);
+      actions.append(cal, sb, tt, cl, edit);
     }
     body.appendChild(actions);
     card.append(head, body);
@@ -6136,7 +6163,7 @@
       ],
       page8: [
         T('⏱️', 'Timetable', 'Der Ablauf der Band an einem Gig-Tag: Uhrzeit und Titel, z. B. Get In, Soundcheck, Essen, Auftritt, Abbau. Oben wählst du den Gig.'),
-        T('➕', 'Einträge', '„+ Eintrag“ öffnet das Eingabefenster. Mit „Import“ liest du eine Textdatei (Zeile „16:00 Soundcheck“) oder eine CSV-Datei (Uhrzeit;Titel;Notiz) ein oder fügst den Text direkt ein.'),
+        T('➕', 'Einträge', '„+ Eintrag“ öffnet das Eingabefenster. Pflicht sind Bandname und Startzeit; Ende oder Dauer, Songzahl und Setlist sind optional. Mit „Import“ liest du eine Textdatei (Zeile „19:00 - 19:45 Bandname“) oder CSV (Uhrzeit;Band;Ende;Dauer;Songs;Notiz) ein.'),
         T('📅', 'Kalender', 'In der Tagesansicht des Kalenders blendet der Knopf „Timetable“ die Einträge des Gigs ein oder aus.'),
         T('📤', 'Export', 'Die gelben Knöpfe speichern den Ablauf als Text oder CSV.'),
       ],

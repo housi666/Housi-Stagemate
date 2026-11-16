@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.7 · Build 29 · 2026-11-16 */
+/*! Stagemate v0.4.8 · Build 30 · 2026-11-16 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1617,3 +1617,7 @@
 .cal-foot-btns { display: flex; gap: 6px; flex-wrap: wrap; }
 #calTT.on { background: var(--accent, #f5c518); color: #000; }
 .ev-plan.is-tt { border-style: dashed; }
+
+.gig-msg-red { margin: 0 0 8px; padding: 8px 12px; border-radius: 8px; background: #ef4444; color: #fff; font-weight: 600; font-size: 13px; }
+.gig-body > .note-info { margin: 0 0 10px; }
+.tt-setlink { display: inline-block; margin-top: 3px; font-size: 12.5px; color: var(--accent, #f5c518); text-decoration: underline; cursor: pointer; }

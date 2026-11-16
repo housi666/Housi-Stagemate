@@ -1,16 +1,23 @@
-/*! Stagemate v0.4.7 · Build 29 · 2026-11-16 */
+/*! Stagemate v0.4.8 · Build 30 · 2026-11-16 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.7';
-const APP_BUILD = 29;
+const APP_VERSION = 'v0.4.8';
+const APP_BUILD = 30;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.8', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Gigs: Knopf „Zur Setlist“ springt zur verknüpften Setlist; ohne Verknüpfung oben rote Meldung „Noch keine Setlist verknüpft“ und blauer Hinweis' },
+    { type: 'neu', text: 'Timetable-Eintrag: Bandname und Startzeit sind Pflicht; optional Ende oder Spieldauer, Anzahl Songs, Setlist-Verknüpfung (Sprung zur Setlist)' },
+    { type: 'neu', text: 'Kalender Tagesansicht zeigt Ende, Songs und Setlist der Timetable-Einträge' },
+    { type: 'neu', text: 'Import/Export Timetable: CSV-Spalten Uhrzeit;Band;Ende;Dauer;Songs;Notiz, Text „19:00 - 19:45 Bandname“' },
+    { type: 'neu', text: 'Testdaten: pro Gig eine Timetable mit allen Bands des Line-ups, verknüpft mit Bands und Setlists; Test-Setlist ist dem ersten Gig der Band zugewiesen' },
+  ] },
   { version: 'v0.4.7', date: '2026-11-16', items: [
     { type: 'neu', text: 'Neue Registerkarte Timetable: Ablauf der Band pro Gig (Uhrzeit, Titel, Notiz), Eingabefenster zum Erfassen und Bearbeiten' },
     { type: 'neu', text: 'Import per Textdatei (Zeile 16:00 Soundcheck) oder CSV (Uhrzeit;Titel;Notiz), auch per Einfügen; Export als Text oder CSV' },
