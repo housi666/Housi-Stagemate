@@ -16,7 +16,7 @@
     { id: 'page5', title: 'Finanzen' },
   ];
   const LEVELS = { edit: 'Bearbeiten', read: 'Nur lesen', hidden: 'Ausgeblendet' };
-  const PAGE_TITLES = { overview: 'Übersicht', profile: 'Profil & Bands', team: 'Verwaltung', settings: 'Einstellungen' };
+  const PAGE_TITLES = { home: 'Startbildschirm', overview: 'Übersicht', profile: 'Profil & Bands', team: 'Verwaltung', settings: 'Einstellungen' };
   REGISTERS.forEach(r => PAGE_TITLES[r.id] = r.title);
 
   const logo = document.getElementById('logoTpl');
@@ -576,7 +576,7 @@
     Object.keys(editRoles).sort().forEach(k => { roles[k] = [...editRoles[k]].sort(); });
     const code = $('fCode').value.trim(), bname = $('fBandName').value.trim();
     const nb = newBandMode !== 'none' && (code || bname || newRoles.size) ? [newBandMode, code, bname, [...newRoles].sort().join(',')].join('|') : '';
-    return JSON.stringify({ pp: $('fPhotoPublic').checked, n: $('fName').value.trim(), fn: $('fFirst').value.trim(), ln: $('fLast').value.trim(), t: $('fTerms').checked, e: $('fEmail').value.trim(), p: $('fPhone').value.trim(), ph: currentPhoto() || null, r: roles, nb });
+    return JSON.stringify({ n: $('fName').value.trim(), fn: $('fFirst').value.trim(), ln: $('fLast').value.trim(), t: $('fTerms').checked, e: $('fEmail').value.trim(), p: $('fPhone').value.trim(), ph: currentPhoto() || null, r: roles, nb });
   }
   const isProfileDirty = () => !!profile && !!profileSnap && !$('app').classList.contains('hidden') && profileState() !== profileSnap;
   ['input', 'change', 'click'].forEach(ev => form.addEventListener(ev, () => setTimeout(updateDirty, 0)));
@@ -593,7 +593,6 @@
     $('fTerms').checked = false;
     $('termsWrap').classList.toggle('hidden', !needsTerms());
     regTag = ''; mountRegTag();
-    $('fPhotoPublic').checked = !(profile && profile.photoPublic === false);
     $('puidRow').classList.toggle('hidden', !(profile && profile.puid));
     $('puidVal').textContent = (profile && profile.puid) || ''; $('puidVal').classList.add('hidden'); $('puidBtn').textContent = 'PUID anzeigen';
     $('fPhone').value = profile?.phone || '';
@@ -710,7 +709,7 @@
       const p = profile ? clone(profile) : { createdAt: now, bandIds: [], memberships: {} };
       if (!p.puid) p.puid = await newPuid();
       p.nickKey = nickKey(name);
-      p.photoPublic = $('fPhotoPublic').checked;
+      if (p.photoPublic === undefined) p.photoPublic = true;
       p.name = name; p.firstName = firstName; p.lastName = lastName; p.email = email; p.phone = phone; p.updatedAt = now;
       if (acceptTerms) p.terms = { version: LEGAL_VERSION, acceptedAt: now };
       if (photoDraft !== undefined) { if (photoDraft) p.photo = photoDraft; else delete p.photo; }
@@ -872,7 +871,7 @@
 
   $('loginBtn').addEventListener('click', () => {
     if (!bandIdsOf(profile).length || needsTerms()) return showTab('register');
-    showBandsOverview();
+    enterHub();
   });
 
   // ================= Übersicht „Deine Bands“ (nach dem Anmelden) =================
@@ -934,6 +933,9 @@
     const ids = bandIdsOf(profile);
     if (!ids.length) return;
     hideBandsOverview();
+    inHub = false; $('app').classList.remove('hub-mode'); ls.sset('smView', 'band');
+    $('brandSub').textContent = 'Band-Verwaltung';
+    if (currentPage === 'home') currentPage = 'overview';
     currentBand = ids.includes(bandId) ? bandId : ids[0];
     ls.sset('bandLoggedIn', '1');
     applyNavOrder();
@@ -944,6 +946,7 @@
     $('auth').classList.add('hidden');
     $('app').classList.remove('hidden');
     ensurePuid();
+    tickSideClock(); delete bandMembersCache[currentBand]; startPresence();
     if (form.parentElement !== $('profileSlot')) { $('profileSlot').appendChild(form); prepareForm(); }
     renderAppHeader();
     showPage(currentPage);
@@ -959,10 +962,7 @@
     renderBandList();
     renderBrandLogo();
     loadEvents();
-    setAvatar($('appAvatar'), profile.name, profile.photo, { zoom: false });
-    const an = $('appName'); an.innerHTML = ''; an.append(profile.name);
-    bandIdsOf(profile).forEach(id => { const b = bands[id]; if (b && b.tag && showOf(b).tag) an.append(tagChip(b.tag)); });
-    $('appRole').textContent = 'Profil und Bands';
+    renderSideUser();
     const wl = $('welcomeLine'); wl.innerHTML = '';
     wl.append('Hallo ', el('strong', null, profile.name.split(/\s+/)[0]), ', willkommen zurück!');
     $('ovCode').textContent = band.code;
@@ -1025,11 +1025,14 @@
     const reg = REGISTERS.find(r => r.id === page);
     if (reg && levelFor(currentBand, page) === 'hidden') page = 'overview';
     currentPage = page;
+    placeUI(page === 'home' ? 'hub' : page);
+    $('page-home').classList.toggle('hidden', page !== 'home');
+    if (page === 'home') { renderHub(); if (!isSettingsDirty()) setDraft = null; renderSettingsAll(); }
     document.querySelectorAll('.sidebar [data-page]').forEach(b => b.classList.toggle('active', b.dataset.page === page));
     $('pageTitle').textContent = PAGE_TITLES[page];
     $('roBadge').classList.toggle('hidden', !(reg && levelFor(currentBand, page) === 'read'));
     $('page-overview').classList.toggle('hidden', page !== 'overview');
-    if (page === 'overview') renderOverview();
+    if (page === 'overview') { renderOverview(); renderOvMembers(); refreshOnline(); }
     $('page-profile').classList.toggle('hidden', page !== 'profile');
     if (page === 'profile') renderAccount();
     $('page-team').classList.toggle('hidden', page !== 'team');
@@ -1045,13 +1048,193 @@
     if (page === 'page2') renderCalendar(0);
     if (page === 'profile' && !isProfileDirty()) prepareForm();
     if (page === 'team') openTeam();
-    if (page === 'settings') { if (!isSettingsDirty()) setDraft = null; renderSortOptions(); renderShareSettings(); renderClockSettings(); renderCursorOptions(); }
+    if (page === 'settings') { if (!isSettingsDirty()) setDraft = null; renderSettingsAll(); }
     updateDirty();
   }
+  // ================= Startbildschirm: Bands, Profil und Einstellungen auf einem Bildschirm =================
+  let inHub = false;
+  const accCard = $('accountCard');
+  function placeUI(where) {
+    const sw = document.querySelector('.settings-wrap');
+    if (where === 'hub') {
+      if (form.parentElement !== $('hubProfileSlot')) { $('hubProfileSlot').append(form, accCard); if (!isProfileDirty()) prepareForm(); renderAccount(); }
+      if (sw.parentElement !== $('hubSettingsSlot')) $('hubSettingsSlot').append(sw);
+    } else {
+      if (form.parentElement === $('hubProfileSlot')) { $('profileSlot').append(form); $('profileSlot').after(accCard); if (!isProfileDirty()) prepareForm(); }
+      if (sw.parentElement !== $('page-settings')) $('page-settings').append(sw);
+    }
+  }
+  let hubFolded = { profile: true, settings: true };
+  try { hubFolded = { ...hubFolded, ...JSON.parse(ls.get('hubFolded') || '{}') }; } catch (e) {}
+  const saveHubFold = () => { try { ls.set('hubFolded', JSON.stringify(hubFolded)); } catch (e) {} };
+  document.querySelectorAll('.hub-sec').forEach(sec => {
+    const k = sec.dataset.hub;
+    sec.classList.toggle('folded', !!hubFolded[k]);
+    sec.querySelector('.hub-head').addEventListener('click', () => { sec.classList.toggle('folded'); hubFolded[k] = sec.classList.contains('folded'); saveHubFold(); });
+  });
+  document.querySelectorAll('[data-hub-all]').forEach(b => b.addEventListener('click', () => {
+    const close = b.dataset.hubAll === 'close';
+    document.querySelectorAll('.hub-sec').forEach(sec => { sec.classList.toggle('folded', close); hubFolded[sec.dataset.hub] = close; });
+    saveHubFold();
+  }));
+  function openHubSection(k, target) {
+    if (currentPage !== 'home') showPage('home');
+    const sec = document.querySelector(`.hub-sec[data-hub="${k}"]`);
+    sec.classList.remove('folded'); hubFolded[k] = false; saveHubFold();
+    if (target && target.classList) target.classList.remove('folded');
+    setTimeout(() => (target || sec).scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  }
+  function renderHub() {
+    setAvatar($('homeAvatar'), profile.name, profile.photo);
+    const h = $('homeHello'); h.innerHTML = ''; h.append('Hallo ', el('strong', null, profile.name), '!');
+    const ids = bandIdsOf(profile);
+    $('hubBandCount').textContent = ids.length;
+    const list = $('hubBandList'); list.innerHTML = '';
+    if (!ids.length) list.append(el('div', 'mnote', 'Du bist noch in keiner Band. Tritt einer Band bei oder gründe eine.'));
+    const sorted = [...ids].sort((a, c) => (a === profile.lastBand ? -1 : c === profile.lastBand ? 1 : (bands[a].name || '').localeCompare(bands[c].name || '', 'de')));
+    sorted.forEach(id => list.append(bandCard(id)));
+  }
+  $('hubAddBand').addEventListener('click', () => {
+    const blk = $('addBandBlock'); blk.classList.remove('folded');
+    openHubSection('profile', blk);
+  });
+  function renderSideUser() {
+    setAvatar($('appAvatar'), profile.name, profile.photo, { zoom: false });
+    const an = $('appName'); an.innerHTML = ''; an.append(profile.name);
+    bandIdsOf(profile).forEach(id => { const b = bands[id]; if (b && b.tag && showOf(b).tag) an.append(tagChip(b.tag)); });
+    $('appRole').textContent = 'Profil und Bands';
+  }
+  function enterHub() {
+    { const am = document.getElementById('alphaModal'); if (am) am.classList.add('hidden'); }
+    if (typeof showTipsHint === 'function') showTipsHint();
+    hideBandsOverview();
+    inHub = true;
+    const ids = bandIdsOf(profile);
+    if (!ids.includes(currentBand)) currentBand = ids[0] || null;
+    ls.sset('bandLoggedIn', '1'); ls.sset('smView', 'hub');
+    $('auth').classList.add('hidden');
+    $('app').classList.remove('hidden'); $('app').classList.add('hub-mode');
+    const bn = $('brandName'); bn.innerHTML = ''; bn.append('Stagemate');
+    $('brandSub').textContent = 'Startbildschirm';
+    const lg = $('brandLogo'); lg.innerHTML = ''; lg.className = 'brand-logo'; lg.onclick = null; lg.appendChild(defaultLogo());
+    renderSideUser();
+    applyNavOrder();
+    ensurePuid();
+    showPage('home');
+    tickSideClock(); startPresence();
+  }
+  $('homeBtn').addEventListener('click', () => enterHub());
+  $('onlineBtn').addEventListener('click', () => { if (inHub) return; showPage('overview'); setTimeout(() => $('ovMembers').scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); });
+
+  // ================= Uhr und Datum oben links =================
+  function tickSideClock() {
+    if (!profile || $('app').classList.contains('hidden')) return;
+    const c = ovCfg(), now = new Date(), t = $('scTime');
+    if (c.face === 'analog') { t.classList.add('analog'); t.innerHTML = analogSvg(now); }
+    else { t.classList.remove('analog'); t.textContent = fmtTimeOv(now, c.time, true); }
+    $('scDate').textContent = fmtDateOv(now, c.date);
+  }
+  setInterval(tickSideClock, 1000);
+
+  // ================= Online-Status =================
+  // presence/<uid> { online, since, lastSeen } – alle 60 s aktualisiert, solange Stagemate offen ist
+  const PRES_TTL = 150000;
+  let presSince = Date.now(), presTimer = null, lastBeat = 0;
+  const presCache = {}, bandMembersCache = {};
+  async function beat(state = 'online') {
+    if (!db || !uid || readOnly || !profile) return;
+    lastBeat = Date.now();
+    try { await db.doc('presence/' + uid).set({ online: state === 'online', since: presSince, lastSeen: Date.now() }); } catch (e) {}
+  }
+  function startPresence() {
+    if (!presTimer) { presSince = Date.now(); beat(); presTimer = setInterval(() => { if (!document.hidden) { beat(); refreshOnline(); } }, 60000); }
+    refreshOnline();
+  }
+  function stopPresence() { if (presTimer) { clearInterval(presTimer); presTimer = null; beat('offline'); } }
+  document.addEventListener('visibilitychange', () => {
+    if (!presTimer) return;
+    if (document.hidden) beat('away');
+    else { if (Date.now() - lastBeat > PRES_TTL) presSince = Date.now(); beat(); refreshOnline(); }
+  });
+  window.addEventListener('pagehide', () => { if (presTimer) beat('offline'); });
+  const isOnline = p => !!p && p.online && Date.now() - (p.lastSeen || 0) < PRES_TTL;
+  async function refreshOnline(force) {
+    if (!currentBand || inHub || !bands[currentBand]) return renderOnline();
+    const bid = currentBand;
+    try {
+      if (force || !bandMembersCache[bid]) {
+        const q = await db.collection('members').where('bandIds', 'array-contains', bid).get();
+        bandMembersCache[bid] = q.docs.map(d => ({ uid: d.id, ...d.data() })).filter(m => isActiveIn(m, bid, bands[bid].cfg));
+      }
+      await Promise.all(bandMembersCache[bid].map(async m => {
+        if (m.uid === uid) { presCache[uid] = { online: true, since: presSince, lastSeen: Date.now() }; return; }
+        try { const s = await db.doc('presence/' + m.uid).get(); presCache[m.uid] = s.exists ? s.data() : null; } catch (e) {}
+      }));
+    } catch (e) {}
+    renderOnline();
+  }
+  function renderOnline() {
+    const ms = (currentBand && bandMembersCache[currentBand]) || [];
+    const on = ms.filter(m => isOnline(presCache[m.uid])).length;
+    $('onlineTxt').textContent = ms.length ? `${on} / ${ms.length} online` : '– online';
+    $('onlineBtn').classList.toggle('has-on', on > 0);
+    if (currentPage === 'overview') renderOvMembers();
+  }
+  // Übersicht: Mitglieder mit Online-Status, sortierbar
+  let ovmSort = ls.get('ovmSort') || 'name', ovmDir = ls.get('ovmDir') || 'asc';
+  const roleRank = m => isFounder(currentBand, m.uid) ? 0 : (r => r.includes('Organisation') ? 1 : r.includes(CL_ROLE) ? 2 : 3)(memberRoles(m, currentBand));
+  function whenText(ms) {
+    if (!ms) return '';
+    const d = new Date(ms), c = ovCfg(), t = fmtTimeOv(d, c.time, false), today = dOnly(new Date());
+    if (sameDay(d, today)) return 'heute ' + t;
+    if (sameDay(d, addDays(today, -1))) return 'gestern ' + t;
+    return fmtDateOv(d, 'short') + ' ' + t;
+  }
+  function renderOvMembers() {
+    const box = $('ovmList'); if (!box) return; box.innerHTML = '';
+    document.querySelectorAll('#ovmSort [data-ms]').forEach(b => b.classList.toggle('on', b.dataset.ms === ovmSort));
+    $('ovmDir').textContent = ovmDir === 'asc' ? '↑ aufsteigend' : '↓ absteigend';
+    const ms = (bandMembersCache[currentBand] || []).slice();
+    if (!ms.length) { box.append(el('div', 'mnote', 'Mitglieder werden geladen …')); return; }
+    const dir = ovmDir === 'asc' ? 1 : -1;
+    const tOf = m => { const p = presCache[m.uid]; return p ? (isOnline(p) ? (p.since || 0) : (p.lastSeen || 0)) : 0; };
+    const cmp = (a, b) => {
+      let r = 0;
+      if (ovmSort === 'role') r = roleRank(a) - roleRank(b);
+      else if (ovmSort === 'time') r = tOf(a) - tOf(b);
+      return (r || (a.name || '').localeCompare(b.name || '', 'de', { sensitivity: 'base' })) * dir;
+    };
+    const groups = [['Online', ms.filter(m => isOnline(presCache[m.uid]))], ['Offline', ms.filter(m => !isOnline(presCache[m.uid]))]];
+    groups.forEach(([title, list]) => {
+      box.append(el('div', 'ovm-group' + (title === 'Online' ? ' on' : ''), `${title} · ${list.length}`));
+      if (!list.length) box.append(el('div', 'mnote', title === 'Online' ? 'Gerade ist niemand online.' : 'Alle sind online.'));
+      list.sort(cmp).forEach(m => {
+        const row = el('div', 'ovm-row');
+        const av = el('div', 'avatar');
+        setAvatar(av, m.name, typeof m.photo === 'string' ? m.photo : null, { locked: photoLocked(m) });
+        const tx = el('div', 'ovm-tx');
+        const nm = el('div', 'ovm-name', m.name || 'Unbekannt');
+        if (isFounder(currentBand, m.uid)) nm.append(el('span', 'admin-badge', 'Admin'));
+        if (m.uid === uid) nm.append(el('span', 'ovm-me', 'Du'));
+        const roles = memberRoles(m, currentBand);
+        tx.append(nm, el('div', 'ovm-roles', roles.length ? roles.join(' · ') : 'Keine Rolle'));
+        const p = presCache[m.uid], on = isOnline(p);
+        const st = el('div', 'ovm-st' + (on ? ' on' : ''), on ? `● online seit ${whenText(p.since)}` : (p && p.lastSeen ? `zuletzt online: ${whenText(p.lastSeen)}` : 'noch nie online'));
+        row.append(av, tx, st); box.append(row);
+      });
+    });
+  }
+  document.querySelectorAll('#ovmSort [data-ms]').forEach(b => b.addEventListener('click', () => {
+    if (ovmSort === b.dataset.ms) ovmDir = ovmDir === 'asc' ? 'desc' : 'asc'; else ovmSort = b.dataset.ms;
+    ls.set('ovmSort', ovmSort); ls.set('ovmDir', ovmDir); renderOvMembers();
+  }));
+  $('ovmDir').addEventListener('click', () => { ovmDir = ovmDir === 'asc' ? 'desc' : 'asc'; ls.set('ovmDir', ovmDir); renderOvMembers(); });
+
   let suppressNavClick = false;
   let lastNavDrag = 0;
   document.querySelectorAll('.sidebar [data-page]').forEach(btn => btn.addEventListener('click', () => {
     if (suppressNavClick) { suppressNavClick = false; return; }
+    if (inHub && (btn.dataset.page === 'profile' || btn.dataset.page === 'settings')) return openHubSection(btn.dataset.page);
     showPage(btn.dataset.page);
   }));
 
@@ -1756,7 +1939,7 @@
       if (folded[key]) b.classList.add('folded');
       h.classList.add('pf-head'); h.title = 'Auf- und zuklappen';
       h.addEventListener('click', () => {
-        if (!$('profileForm').closest('#page-profile')) return;
+        if (!$('profileForm').closest('#page-profile, #page-home')) return;
         b.classList.toggle('folded'); folded[key] = b.classList.contains('folded'); save();
       });
     });
@@ -1793,6 +1976,7 @@
   })();
 
   // ================= Finanzen: befindet sich im Bau =================
+  const FIN_LOCKED = true;   // Finanzen im Bau: für alle Benutzer gesperrt
   const FIN_LOCK = 'Finanzen befinden sich im Bau – diese Funktion ist noch gesperrt.';
   $('buildOk').addEventListener('click', () => $('buildModal').classList.add('hidden'));
   $('buildModal').addEventListener('click', e => { if (e.target === $('buildModal')) $('buildModal').classList.add('hidden'); });
@@ -1892,6 +2076,7 @@
     if (FIN_CATS[t].includes(cur)) sel.value = cur;
   }
   function openFinModal(e, type) {
+    if (FIN_LOCKED) return flash(FIN_LOCK, true);
     finEdit = e ? { ...e } : null;
     const can = finCanEdit() && !viewAs;
     $('finTitleH').textContent = e ? (can ? 'Eintrag bearbeiten' : 'Eintrag') : (type === 'out' ? 'Neue Ausgabe' : 'Neue Einnahme');
@@ -1949,6 +2134,7 @@
   });
   // CSV-Export (Excel-tauglich); Dateiname enthält die Versionsnummer
   $('finExport').addEventListener('click', async () => {
+    if (FIN_LOCKED) return flash(FIN_LOCK, true);
     const list = finEntries.filter(e => (e.date || '').startsWith(String(finYear))).sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.time || '').localeCompare(b.time || ''));
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     const rows = [['Datum', 'Zeit', 'Typ', 'Bezeichnung', 'Kategorie', 'Gig', 'Betrag CHF', 'Notiz'].map(q).join(';')];
@@ -2624,7 +2810,12 @@
     updateDirty();
     flash('Änderungen verworfen');
   });
-  $('ubOpen').addEventListener('click', () => { const t = $('ubOpen').dataset.target; if (t) showPage(t); });
+  $('ubOpen').addEventListener('click', () => {
+    const t = $('ubOpen').dataset.target; if (!t) return;
+    if (inHub && (t === 'profile' || t === 'settings')) return openHubSection(t);
+    if (inHub && t === 'team') return flash('Öffne zuerst die Band, um die Änderungen in der Verwaltung zu sehen.', true);
+    showPage(t);
+  });
 
   let flashTimer = null;
   function flash(text, isErr) {
@@ -3885,7 +4076,7 @@
   const clSortLocked = () => `Verschieben gesperrt: Es ist „Sortieren nach: ${clSortName()}“ gewählt. Wähle „Manuell“ (oben über „⇅“ oder in den Einstellungen), um Reiter und Unterreiter selbst zu verschieben.`;
   // ----- Einstellungen: Änderungen erst mit „Speichern“ übernehmen (wie in der Verwaltung) -----
   function settingsDraft() {
-    if (!setDraft) { const oc = ovCfg(); setDraft = { cursor: cursorPref, theme: themePref, clSort: clSortGlobal(), clearBands: [], share: shareState(), clock: { time: oc.time, face: oc.face, date: oc.date } }; }
+    if (!setDraft) { const oc = ovCfg(); setDraft = { cursor: cursorPref, theme: themePref, clSort: clSortGlobal(), clearBands: [], share: shareState(), clock: { time: oc.time, face: oc.face, date: oc.date }, photoPublic: !(profile && profile.photoPublic === false) }; }
     return setDraft;
   }
   // Sichtbarkeit von E-Mail/Telefon pro Band (gespeichert im eigenen Profil unter memberships[band].share)
@@ -3894,7 +4085,7 @@
     bandIdsOf(profile).forEach(id => { const sh = (profile.memberships && profile.memberships[id] && profile.memberships[id].share) || {}; out[id] = { email: !!sh.email, phone: !!sh.phone }; });
     return out;
   }
-  const isSettingsDirty = () => !!setDraft && (setDraft.cursor !== cursorPref || setDraft.theme !== themePref || setDraft.clSort !== clSortGlobal() || setDraft.clearBands.length > 0 || JSON.stringify(setDraft.share) !== JSON.stringify(shareState()) || clockChanged(setDraft));
+  const isSettingsDirty = () => !!setDraft && (setDraft.cursor !== cursorPref || setDraft.theme !== themePref || setDraft.clSort !== clSortGlobal() || setDraft.clearBands.length > 0 || JSON.stringify(setDraft.share) !== JSON.stringify(shareState()) || clockChanged(setDraft) || setDraft.photoPublic !== !(profile && profile.photoPublic === false));
   const clockChanged = d => { const oc = ovCfg(); return !!d.clock && (d.clock.time !== oc.time || d.clock.face !== oc.face || d.clock.date !== oc.date); };
   // Einstellungen „Uhr & Datum“ (gilt für die Übersicht und alle Zeitangaben dort)
   function renderClockSettings() {
@@ -3918,6 +4109,27 @@
     f.append(l, sel); box.appendChild(f);
     box.appendChild(el('div', 'note-info clock-tz', `Zeitzone: ${tzName()} (${tzOffset()}) – vom Gerät übernommen.` + (ovLoc ? ` Standort: ${locText()}.` : '')));
   }
+  function renderSettingsAll() { renderSortOptions(); renderShareSettings(); renderClockSettings(); renderCursorOptions(); renderVis(); }
+  // Sichtbarkeit: Profilbild + Hinweis/Knopf zur Bandsichtbarkeit (nur auf einer Bandseite)
+  function renderVis() {
+    if (!profile) return;
+    $('setPhotoPublic').checked = settingsDraft().photoPublic;
+    $('visToTeam').classList.toggle('hidden', inHub || !currentBand);
+  }
+  $('setPhotoPublic').addEventListener('change', () => { settingsDraft().photoPublic = $('setPhotoPublic').checked; updateDirty(); });
+  $('visToTeam').addEventListener('click', () => {
+    if (!isAdmin(currentBand)) return flash('Die Sichtbarkeit der Band kann nur der Admin unter „Verwaltung → Band“ ändern.', true);
+    showPage('team');
+    const p = $('bandNamePanel'); p.classList.remove('folded');
+    setTimeout(() => p.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  });
+  function goVisibility() {
+    if (inHub) return openHubSection('settings', $('visPanel'));
+    showPage('settings');
+    const p = $('visPanel'); p.classList.remove('folded');
+    setTimeout(() => p.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  }
+  $('pfToVis').addEventListener('click', goVisibility);
   function renderShareSettings() {
     const box = $('shareSettings'); if (!box || !profile) return;
     box.innerHTML = '';
@@ -3962,17 +4174,18 @@
       profChanged = true;
     }
     if (profile && clockChanged(d)) { profile.overview = { ...ovCfg(), ...d.clock }; profChanged = true; }
+    if (profile && d.photoPublic !== (profile.photoPublic !== false)) { profile.photoPublic = d.photoPublic; profChanged = true; }
     if (profile && d.clearBands.length) { profile.clSortBand = { ...(profile.clSortBand || {}) }; d.clearBands.forEach(id => delete profile.clSortBand[id]); profChanged = true; }
     setDraft = null;
     applyTheme(); applyCursor(); updateDirty();
-    if (currentPage === 'settings') { renderSortOptions(); renderShareSettings(); renderClockSettings(); renderCursorOptions(); }
+    if (currentPage === 'settings' || currentPage === 'home') renderSettingsAll();
     setMsg($('setMsg'), '');
     if (profChanged) await saveProfileQuiet();
     flash('Einstellungen gespeichert ✓');
   }
   function discardSettings() {
     setDraft = null; applyTheme(); applyCursor();
-    if (currentPage === 'settings') { renderSortOptions(); renderShareSettings(); renderClockSettings(); renderCursorOptions(); }
+    if (currentPage === 'settings' || currentPage === 'home') renderSettingsAll();
     updateDirty();
   }
   $('setSave').addEventListener('click', () => saveSettings());
@@ -4876,6 +5089,8 @@
         T('💾', 'Speichern nicht vergessen', 'Änderungen gelten erst nach „Speichern“. Solange etwas offen ist, steht oben ein oranger Hinweis mit „Speichern“ und „Verwerfen“ – auch wenn du die Seite wechselst.', roles),
       ],
       overview: [
+        T('🟢', 'Mitglieder online', 'Unten in der Übersicht siehst du alle Mitglieder, getrennt nach Online und Offline. Sortieren nach 🔤 Name, 🎖 Rolle (Admin, Organisation, Checkliste, übrige) oder 🕒 Zeit (online seit / zuletzt online). Nochmals klicken oder ↑/↓ dreht die Reihenfolge.'),
+        T('🔢', 'Online-Anzeige', 'Unter dem Bandnamen oben links steht, wie viele Mitglieder gerade online sind. Ein Klick führt hierher.'),
         T('🏠', 'Übersicht', 'Hier siehst du auf einen Blick deine Band und deine Rollen.'),
         T('🎸', 'Band wechseln', 'Oben in der Seitenleiste auf „Bands“ tippen – die Liste klappt auf. Wähle eine Band oder „+ Band beitreten oder gründen“.'),
         T('🪟', 'Fenster', 'Die Übersicht zeigt Band, deine Rollen, Uhr & Datum, deinen nächsten Gig, deinen nächsten Termin und deinen nächsten Checklisten-Punkt (was du übernommen hast). Ein Klick auf den Knopf im Fenster springt direkt dorthin. Pack ein Fenster und zieh es an einen anderen Platz – auf dem Handy kurz gedrückt halten. Die Anordnung wird in deinem Profil gespeichert.'),
@@ -4934,58 +5149,84 @@
       ],
       profile: [
         T('🎸', 'Zu deinen Bands', 'Bist du nur in einer Band, führt „Zu deinen Bands“ im Sortiermenü der Checkliste hierher – der Bereich zum Beitreten oder Gründen leuchtet kurz auf.'),
-        T('🖼️', 'Profilbild', 'Bild hinzufügen, ändern oder löschen. Es wird zugeschnitten und erst mit „Speichern“ übernommen. Andere sehen es in der Mitgliederliste.'),
-        T('👤', 'Name & Kontakt', 'Name, E-Mail und Telefon kannst du hier jederzeit ändern. Wer in welcher Band deine E-Mail und Telefonnummer sieht, legst du in den Einstellungen unter „Kontaktangaben“ fest.'),
+        T('🖼️', 'Profilbild', 'Bild hinzufügen, ändern oder löschen. Es wird zugeschnitten und erst mit „Speichern“ übernommen. Ob andere es sehen, stellst du unter Einstellungen → Sichtbarkeit ein.'),
+        T('👤', 'Persönliche Angaben', 'Nickname, Vorname, Nachname und Telefon. In der Web-Version fragt Stagemate beim Speichern nach deinem Passwort. Der Nickname muss eindeutig sein.'),
+        T('🆔', 'PUID', 'Deine feste ID. „PUID anzeigen“ blendet sie ein, ein zweiter Klick wieder aus.'),
+        T('🔽', 'Bereiche zuklappen', 'Ein Klick auf „Persönliche Angaben“, „Deine Bands“ oder „Weitere Band hinzufügen“ klappt den Bereich zu oder auf. Oben gibt es „Alle aufklappen“ und „Alle zuklappen“.'),
+        T('👁', 'Sichtbarkeit', '„Sichtbarkeitseinstellungen“ unten im Profil führt direkt zu allen Sichtbarkeiten in den Einstellungen.'),
+        T('📜', 'Rechtliches', 'Nutzungsbedingungen und Datenschutzerklärung findest du unten im Profil und in den Einstellungen.'),
+        T('🔐', 'Konto', 'Web-Version: Passwort ändern oder Konto löschen. Gründer/Admins lösen vorher ihre Band auf.'),
         T('🎭', 'Rollen', 'Deine Rollen legen der Admin und Mitglieder mit „Organisation“ fest – im Profil werden sie nicht geändert.'),
         T('🎸', 'Weitere Band', '„Band beitreten“ mit dem Band-Code (6 Zeichen) oder deinem persönlichen Code (8 Zeichen) – oder „Neue Band gründen“. Wer gründet, ist Admin.'),
         T('💾', 'Speichern', 'Offene Änderungen zeigt der orange Hinweis oben – dort kannst du speichern oder verwerfen.'),
+      ],
+      home: [
+        T('🏠', 'Startbildschirm', 'Hier landest du nach dem Anmelden: deine Bands, dein Profil und deine Einstellungen auf einem Bildschirm.'),
+        T('🎸', 'Band öffnen', 'Klick auf eine Band öffnet sie. Die zuletzt geöffnete steht zuoberst. Logo, Name und Tag erscheinen so, wie die Band es eingestellt hat.'),
+        T('🔽', 'Aufklappen', '„Deine Bands“, „Profil“ und „Einstellungen“ lassen sich einzeln auf- und zuklappen – oder oben alle auf einmal.'),
+        T('➕', 'Weitere Band', '„+ Band beitreten oder gründen“ öffnet im Profil den passenden Bereich.'),
+        T('↩️', 'Zurück hierher', 'In einer Band führt „Zurück zum Startbildschirm“ unten links wieder hierher. So wechselst du die Band.'),
       ],
       settings: [
         T('🔽', 'Fenster zuklappen', 'Ein Klick auf den Titel eines Bereichs klappt ihn zu oder auf. Oben rechts gibt es „Alle aufklappen“ und „Alle zuklappen“. Der Zustand bleibt in diesem Browser gespeichert.'),
         T('🖕', 'Mauszeiger', 'Wähle Mittelfinger, Zeigefinger, Rockhand, Fadenkreuz oder den normalen Mauszeiger. Die Wahl wird sofort angezeigt und gilt nach dem Speichern für diesen Browser. Der gewählte Zeiger bleibt überall gleich – auch über Knöpfen und Registerkarten; in Eingabefeldern bleibt der Text-Cursor.'),
         T('🕒', 'Uhr & Datum', 'Zeitformat (24 oder 12 Stunden), Uhr (digital oder analog) und Datumsformat für die Übersicht. Die Zeitzone wird vom Gerät übernommen.'),
-        T('📇', 'Kontaktangaben', 'Pro Band legst du fest, ob deren Mitglieder deine E-Mail und Telefonnummer sehen. Gespeichert wird erst mit „Speichern“.'),
+        T('👁', 'Sichtbarkeit', 'Alle persönlichen Sichtbarkeiten an einem Ort: Profilbild (aus = andere sehen es verschwommen mit Schloss) und pro Band E-Mail und Telefon. Logo, Name und Tag der Band stellt der Admin unter „Verwaltung → Band“ ein – auf einer Bandseite führt „Zur Verwaltung“ direkt dorthin.'),
+        T('📜', 'Rechtliches', 'Ganz unten: Nutzungsbedingungen und Datenschutzerklärung.'),
         T('⇅', 'Checkliste sortieren', 'Ordnet Checklisten, Reiter und Unterreiter für dich: nach persönlichem Status, Bandstatus, Termin (kommende zuerst), Alphabet oder manuell. Gilt nach dem Speichern für alle Bands – bis du in der Registerkarte „Checkliste“ über „⇅“ später für eine Band eine eigene wählst. Bands mit eigener Sortierung stehen darunter und lassen sich „zurücksetzen“. Nur bei „Manuell“ kannst du Reiter selbst verschieben.'),
         T('🌓', 'Darstellung', 'Hell, Dunkel oder Automatisch (folgt der Einstellung deines Geräts). Die Wahl wird gleich als Vorschau angezeigt und gilt nach dem Speichern für diesen Browser.'),
         T('💾', 'Speichern', 'Änderungen in den Einstellungen gelten erst nach „Speichern“ – wie in der Verwaltung. Solange etwas offen ist, steht oben ein oranger Hinweis mit „Speichern“ und „Verwerfen“, auch wenn du die Seite wechselst.'),
       ],
     };
-    const names = { team: 'Verwaltung', overview: 'Übersicht', page2: 'Kalender', page3: 'Gigs', page4: 'Checkliste', page5: 'Finanzen', profile: 'Profil & Bands', settings: 'Einstellungen' };
+    const names = { home: 'Startbildschirm', team: 'Verwaltung', overview: 'Übersicht', page2: 'Kalender', page3: 'Gigs', page4: 'Checkliste', page5: 'Finanzen', profile: 'Profil & Bands', settings: 'Einstellungen' };
     return { name: names[page] || 'diese Seite', list: (t[page] || []).filter(Boolean) };
   }
   function openTips() {
-    const { name, list } = tipsFor(currentPage);
-    $('tipsTitle').textContent = 'Tipps · ' + name;
+    $('tipsTitle').textContent = 'Tipps';
     const body = $('tipsBody'); body.innerHTML = '';
-    const sec = (title, items) => {
-      if (title) body.appendChild(el('div', 'tips-sec', title));
+    const tools = el('div', 'fold-tools tips-tools');
+    const allOpen = el('button', 'linkish-btn', 'Alle aufklappen'), allClose = el('button', 'linkish-btn', 'Alle zuklappen');
+    [allOpen, allClose].forEach(x => { x.type = 'button'; });
+    allOpen.addEventListener('click', () => body.querySelectorAll('details').forEach(d => { d.open = true; }));
+    allClose.addEventListener('click', () => body.querySelectorAll('details').forEach(d => { d.open = false; }));
+    tools.append(allOpen, allClose); body.append(tools);
+    const cat = (title, icon, items, open) => {
+      const d = el('details', 'tips-cat'); d.open = !!open;
+      const sm = el('summary'); sm.append(el('span', 'tc-ico', icon), el('span', 'tc-t', title), el('span', 'tc-n', String(items.length)));
+      const inner = el('div', 'tc-body');
       items.forEach(it => {
         const row = el('div', 'tip');
         row.append(el('div', 'tip-ico', it.icon));
         const tx = el('div'); tx.append(el('div', 'tip-title', it.title), el('div', 'tip-text', it.text));
-        row.appendChild(tx); body.appendChild(row);
+        row.appendChild(tx); inner.appendChild(row);
       });
+      d.append(sm, inner); body.append(d);
     };
-    sec('', list.length ? list : [{ icon: 'ℹ️', title: 'Keine Tipps', text: 'Für diese Seite gibt es noch keine Tipps.' }]);
+    const ICONS = { home: '🏠', overview: '🧭', team: '👥', page2: '📅', page3: '🎤', page4: '☑️', page5: '💰', profile: '👤', settings: '⚙️' };
+    const cur = tipsFor(currentPage);
+    cat('Diese Seite: ' + cur.name, '📍', cur.list.length ? cur.list : [{ icon: 'ℹ️', title: 'Keine Tipps', text: 'Für diese Seite gibt es noch keine Tipps.' }], true);
+    const pages = inHub ? ['home', 'profile', 'settings'] : ['home', 'overview', 'team', 'page2', 'page3', 'page4', 'page5', 'profile', 'settings'];
+    pages.filter(p => p !== currentPage).forEach(p => { const t = tipsFor(p); if (t.list.length) cat(t.name, ICONS[p], t.list, false); });
     const general = [
       { icon: '↕️', title: 'Registerkarten sortieren', text: 'Halte eine Registerkarte in der Seitenleiste gedrückt und ziehe sie an die gewünschte Stelle. Die Reihenfolge wird in deinem Profil gespeichert.' },
-      { icon: '🎸', title: 'Bands', text: 'Oben in der Seitenleiste auf „Bands“ tippen: Liste aufklappen, Band wechseln oder einer weiteren Band beitreten.' },
+      { icon: '🎸', title: 'Band wechseln', text: 'Unten links „Zurück zum Startbildschirm“ – dort wählst du eine andere Band, trittst einer weiteren bei oder gründest eine.' },
+      { icon: '🕒', title: 'Uhr und Datum', text: 'Ganz oben links laufen Uhr und Datum. Format und Uhr (digital oder analog) stellst du unter Einstellungen → Uhr & Datum ein.' },
+      { icon: '🟢', title: 'Online-Anzeige', text: 'Unter dem Bandnamen steht, wie viele Mitglieder gerade online sind. Ein Klick öffnet die Übersicht mit allen Mitgliedern.' },
       { icon: '◀️', title: 'Seitenleiste einklappen', text: 'Ganz unten „Einklappen“ – dann bleiben nur die Symbole sichtbar.' },
       { icon: '📱', title: 'Auf dem Handy', text: 'Vom linken Rand nach rechts wischen öffnet die Seitenleiste, nach links wischen oder daneben tippen schliesst sie. Solange sie offen ist, ist der Rest gesperrt.' },
       { icon: '💡', title: 'Tipps', text: 'Dieser Knopf unten links zeigt immer die Tipps zur Seite, auf der du gerade bist. Beim Öffnen der App blinkt er kurz zur Erinnerung.' },
-      { icon: '⚙️', title: 'Einstellungen', text: 'Unten links: Darstellung (Hell, Dunkel, Automatisch), Mauszeiger, Uhr & Datum, Sichtbarkeit deiner Kontaktangaben pro Band und die Sortierung der Checkliste.' },
+      { icon: '⚙️', title: 'Einstellungen', text: 'Unten links: Darstellung (Hell, Dunkel, Automatisch), Mauszeiger, Uhr & Datum, Sichtbarkeit und die Sortierung der Checkliste.' },
       { icon: '🚧', title: 'Pre-Alpha', text: 'Stagemate ist noch in einer frühen Pre-Alpha-Version und verändert sich laufend. Die aktuelle Versionsnummer steht ganz unten links. Der Hinweis dazu erscheint jedes Mal auf dem Anmeldebildschirm und lässt sich dort über das Abzeichen „Pre-Alpha“ wieder öffnen.' },
       { icon: '💬', title: 'Support', text: 'Unten links „Support“ öffnet ein Fenster mit den Links zu Instagram und TikTok (housi_666) – für Fragen, Probleme oder Ideen.' },
       { icon: '🔍', title: 'Bilder gross ansehen', text: 'Ein Klick auf ein Profilbild oder Bandlogo zeigt es gross an. Verborgene Bilder sind verschwommen und mit einem Schloss markiert.' },
-      { icon: '🙈', title: 'Profilbild verbergen', text: 'Unter „Profil & Bands“ beim Profilbild „Für andere sichtbar“ ausschalten. Andere sehen dann nur noch ein verschwommenes Bild mit Schloss.' },
+      { icon: '🙈', title: 'Profilbild verbergen', text: 'Unter Einstellungen → Sichtbarkeit „Profilbild für andere sichtbar“ ausschalten. Andere sehen dann nur noch ein verschwommenes Bild mit Schloss.' },
       { icon: '🚧', title: 'Finanzen', text: 'Die Finanzen befinden sich im Bau. Du kannst dich umsehen, die Funktionen sind aber noch gesperrt.' },
-      { icon: '🎸', title: 'Deine Bands', text: 'Nach dem Anmelden siehst du alle deine Bands mit Logo, Tag und deinen Rollen. Ein Klick öffnet die Band; die zuletzt geöffnete steht zuoberst.' },
+      { icon: '🏠', title: 'Startbildschirm', text: 'Nach dem Anmelden siehst du deine Bands mit Logo, Tag und deinen Rollen sowie dein Profil und deine Einstellungen. Ein Klick auf eine Band öffnet sie.' },
       { icon: '👁', title: 'Passwort ansehen', text: 'Das Auge im Passwortfeld gedrückt halten – solange du drückst, siehst du das Passwort im Klartext.' },
       { icon: '🔐', title: 'Konto', text: 'Web-Version: Unter „Profil & Bands“ → „Konto“ änderst du dein Passwort oder löschst dein Konto. Gründer/Admins lösen vorher ihre Band auf.' },
-      { icon: '📜', title: 'Nutzungsbedingungen & Datenschutz', text: 'Findest du unten im Startbildschirm und im Support-Fenster. Bei einer neuen Fassung musst du sie beim nächsten Anmelden erneut akzeptieren.' },
+      { icon: '📜', title: 'Nutzungsbedingungen & Datenschutz', text: 'Findest du im Profil, in den Einstellungen, auf der Anmeldeseite und im Support-Fenster. Bei einer neuen Fassung musst du sie beim nächsten Anmelden erneut akzeptieren.' },
     ];
-    if (currentPage === 'settings') general.splice(general.findIndex(g => g.icon === '⚙️'), 1);
-    sec('Allgemein', general);
+    cat('Allgemein', '💡', general, false);
     $('tipsModal').classList.remove('hidden');
   }
   $('tipsBtn').addEventListener('click', openTips);
@@ -4999,7 +5240,8 @@
 
   // ================= Abmelden / Seitenleiste =================
   $('logoutBtn').addEventListener('click', async () => {
-    ls.sdel('bandLoggedIn');
+    ls.sdel('bandLoggedIn'); ls.sdel('smView');
+    stopPresence(); inHub = false; $('app').classList.remove('hub-mode'); placeUI('pages');
     if (await Data.signOut()) return;   // Web-Version: Konto abmelden, Seite lädt neu
     hideBandsOverview();
     viewAs = null; renderViewAs();
@@ -5189,9 +5431,9 @@
     if (profile && needsTerms()) { showTab('register'); setMsg($('regMsg'), 'Bitte akzeptiere die Nutzungsbedingungen, um weiterzumachen.', 'error'); return; }
     if (!profile || !bandIdsOf(profile).length) return;
     // Neu geladen während der Sitzung: direkt zurück in die App
-    if (ls.sget('bandLoggedIn') === '1') return enterApp(profile.lastBand);
-    // Web-Version: nach der Konto-Anmeldung zuerst die Übersicht „Deine Bands“
-    if (Data.backend === 'firebase') showBandsOverview();
+    if (ls.sget('bandLoggedIn') === '1') return ls.sget('smView') === 'hub' ? enterHub() : enterApp(profile.lastBand);
+    // Web-Version: nach der Konto-Anmeldung zuerst der Startbildschirm
+    if (Data.backend === 'firebase') enterHub();
   }
 
   init();
