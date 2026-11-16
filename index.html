@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stagemate v0.1.9</title>
+<title>Stagemate v0.1.10</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="app.css">
@@ -95,6 +95,8 @@
 <form id="profileForm" novalidate>
   <h2 id="regTitle">Registrieren</h2>
   <p class="hint" id="regHint"></p>
+  <div class="pf-fold" id="personalBlock" data-fold-key="pf:personal">
+  <div class="section-title pf-only">Persönliche Angaben</div>
   <div class="puid-row hidden" id="puidRow">
     <span class="flabel">Deine ID</span>
     <code id="puidVal" class="hidden"></code>
@@ -110,6 +112,7 @@
         <input type="file" id="fPhoto" accept="image/*" class="visually-hidden">
         <button type="button" class="link-danger hidden" id="fPhotoDel">Bild löschen</button>
       </div>
+      <label class="terms-check photo-pub"><input type="checkbox" id="fPhotoPublic" checked><span>Für andere sichtbar</span></label>
       <div class="msg" id="photoMsg"></div>
     </div>
   </div>
@@ -136,13 +139,14 @@
     <label for="fPhone">Telefon <small>(optional)</small></label>
     <input id="fPhone" type="tel" autocomplete="tel" placeholder="+41 …">
   </div>
+  </div>
 
-  <div id="myBandsBlock" class="hidden">
+  <div id="myBandsBlock" class="hidden pf-fold" data-fold-key="pf:bands">
     <div class="section-title">Deine Bands</div>
     <div id="myBands"></div>
   </div>
 
-  <div id="addBandBlock">
+  <div id="addBandBlock" class="pf-fold" data-fold-key="pf:add">
   <div class="section-title" id="newBandTitle">Deine Band</div>
   <div class="seg" id="bandMode">
     <button type="button" data-mode="join" class="on">Band beitreten</button>
@@ -540,7 +544,12 @@
           </div>
         </div>
       </div>
-      <div id="page-profile" class="hidden"><div class="card" id="profileSlot"></div>
+      <div id="page-profile" class="hidden">
+        <div class="fold-tools" data-fold="profile">
+          <button type="button" class="linkish-btn" data-pf-all="open">Alle aufklappen</button>
+          <button type="button" class="linkish-btn" data-pf-all="close">Alle zuklappen</button>
+        </div>
+        <div class="card" id="profileSlot"></div>
         <div class="card account-card hidden" id="accountCard">
           <h2>Konto</h2>
           <p class="hint">Angemeldet als <b id="accEmail"></b></p>
@@ -591,6 +600,22 @@
     <div class="field"><label for="pwAskInput">Passwort</label><input id="pwAskInput" type="password" autocomplete="current-password"></div>
     <div class="msg" id="pwAskMsg"></div>
     <div class="modal-actions"><span style="flex:1"></span><button type="button" class="btn small ghost" id="pwAskCancel">Abbrechen</button><button type="button" class="btn small" id="pwAskOk">Bestätigen</button></div>
+  </div>
+</div>
+<div class="modal-bg hidden" id="imgModal">
+  <div class="img-modal" role="dialog" aria-modal="true" aria-label="Bild">
+    <button type="button" class="img-x" id="imgX" aria-label="Schliessen">×</button>
+    <div class="img-title" id="imgTitle"></div>
+    <img id="imgBig" alt="">
+    <div class="img-actions"><button type="button" class="btn small" id="imgBack">Zurück</button></div>
+  </div>
+</div>
+<div class="modal-bg hidden" id="buildModal">
+  <div class="modal alpha-modal" role="dialog" aria-modal="true" aria-labelledby="buildTitle" style="max-width:440px">
+    <div class="alpha-ic">🚧</div>
+    <h3 id="buildTitle">Befindet sich im Bau</h3>
+    <p id="buildText">Dieser Bereich wird gerade gebaut. Du kannst dich umsehen, die Funktionen sind aber noch gesperrt.</p>
+    <div class="modal-actions"><span style="flex:1"></span><button type="button" class="btn small" id="buildOk">Verstanden</button></div>
   </div>
 </div>
 <div class="modal-bg hidden" id="legalModal">

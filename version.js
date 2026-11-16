@@ -3,13 +3,21 @@
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.1.9';
-const APP_BUILD = 10;
+const APP_VERSION = 'v0.1.10';
+const APP_BUILD = 11;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Pre-Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.1.10', date: '2026-11-16', items: [
+    { type: 'neu', text: 'Profilbild verbergen: andere sehen es verschwommen mit Schloss, ein Klick zeigt den Hinweis' },
+    { type: 'neu', text: 'Verborgenes Bandlogo: verschwommen mit Schloss (nur Admin/Organisation sehen es klar)' },
+    { type: 'neu', text: 'Sichtbare Profilbilder und Bandlogos per Klick gross ansehen' },
+    { type: 'neu', text: 'Profil & Bands: Bereiche auf- und zuklappen, Alle auf-/zuklappen' },
+    { type: 'besser', text: 'Finanzen: Hinweis «Befindet sich im Bau», alle Funktionen gesperrt' },
+    { type: 'besser', text: 'Verborgene Profilbilder werden nur im privaten Bereich gespeichert' },
+  ] },
   { version: 'v0.1.9', date: '2026-11-16', items: [
     { type: 'besser', text: 'Datenschutz: E-Mail und Telefon getrennt gespeichert, nur für dich und Mitglieder gemeinsamer Bands lesbar' },
     { type: 'besser', text: 'Bestehende Profile werden beim Anmelden automatisch umgestellt' },

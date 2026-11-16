@@ -1141,3 +1141,33 @@
   .bov-go { font-size: 24px; color: var(--muted); flex: none; }
   .bov-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }
   .bov-out { color: var(--muted) !important; }
+
+  /* ---- v0.1.10: private Bilder, Bildansicht, Klappbereiche Profil, Finanzen im Bau ---- */
+  .img-zoom { cursor: zoom-in; }
+  .img-locked { position: relative; overflow: hidden; cursor: not-allowed !important; }
+  .avatar.img-locked, .mavatar.img-locked { color: transparent !important; background: linear-gradient(135deg, #8a8d9b, #c9cbd6 45%, #6b6e7b) !important; filter: blur(.6px); }
+  .img-locked > img, .img-locked > svg { filter: blur(7px) saturate(.8); transform: scale(1.15); }
+  .img-locked::after { content: "🔒"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; color: #fff !important; text-shadow: 0 1px 2px rgba(0,0,0,.4); background: rgba(15,16,22,.28); filter: none; }
+  .avatar.img-locked, .mavatar.img-locked { filter: none !important; }
+  .brand-logo.img-locked::after, .bov-logo.img-locked::after { font-size: 16px; }
+  .avatar.big.img-locked::after { font-size: 22px; }
+  #imgModal { align-items: center; }
+  .img-modal { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 44px 20px 16px; max-width: min(92vw, 720px); box-shadow: 0 30px 80px rgba(0,0,0,.4); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .img-modal img { max-width: 100%; max-height: 70vh; border-radius: 12px; display: block; object-fit: contain; }
+  .img-title { position: absolute; top: 14px; left: 20px; right: 56px; font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+  .img-x { position: absolute; top: 8px; right: 10px; width: 36px; height: 36px; border: none; background: none; font-size: 26px; line-height: 1; color: var(--muted); cursor: pointer; border-radius: 10px; }
+  .img-x:hover { background: var(--hover); color: var(--text); }
+  .img-actions { align-self: stretch; display: flex; justify-content: flex-end; }
+  .photo-pub { margin: 8px 0 0 !important; font-size: 12.5px; }
+  .pf-only { display: none; }
+  #page-profile .pf-only { display: block; }
+  #page-profile #personalBlock > .section-title { margin-top: 6px; }
+  #page-profile .pf-head { cursor: pointer; user-select: none; position: relative; padding-right: 24px; }
+  #page-profile .pf-head::after { content: '›'; position: absolute; right: 4px; top: 50%; font-size: 18px; transform: translateY(-30%) rotate(90deg); transition: transform .2s; }
+  #page-profile .pf-fold.folded > .pf-head::after { transform: translateY(-50%) rotate(0deg); }
+  #page-profile .pf-fold.folded > :not(.section-title) { display: none !important; }
+  #page-profile .fold-tools { display: flex; gap: 16px; justify-content: flex-end; margin-bottom: 10px; }
+  .fin-locked button, .fin-locked select, .fin-locked .fin-row { cursor: not-allowed !important; }
+  .fin-locked button:not(.modal-x)::after { content: " 🔒"; font-size: 10px; }
+  .fin-locked select { opacity: .7; }
+  .fin-locked .fin-row { opacity: .85; }

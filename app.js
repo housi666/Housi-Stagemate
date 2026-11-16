@@ -289,7 +289,7 @@
   // ================= Kontaktangaben (E-Mail, Telefon) =================
   // members/<uid>   öffentlich für angemeldete Benutzer (Nickname, Name, Bands …)
   // contacts/<uid>  E-Mail und Telefon – nur die Person selbst und Mitglieder gemeinsamer Bands
-  let lastContact = null;
+  let lastContact = null, lastPrivate = null;
   function withContacts(base) {
     return {
       collection: p => base.collection(p),
@@ -302,6 +302,14 @@
           get: () => ref.get(),
           async set(d) {
             const rest = { ...d }; delete rest.email; delete rest.phone; delete rest._migrateContact;
+            // Verborgenes Profilbild: nur im privaten Dokument der Person speichern
+            if (d.photoPublic === false) {
+              delete rest.photo;
+              if (m[1] === uid) {
+                const pkey = d.photo || '';
+                if (pkey !== lastPrivate) { await base.doc('private/' + m[1]).set({ photo: d.photo || null, updatedAt: new Date().toISOString() }); lastPrivate = pkey; }
+              }
+            }
             await ref.set(rest);
             if (m[1] === uid && ('email' in d || 'phone' in d)) {
               const c = { email: d.email || '', phone: d.phone || '' };
@@ -309,7 +317,14 @@
               if (key !== lastContact) { await base.doc('contacts/' + m[1]).set({ ...c, updatedAt: new Date().toISOString() }); lastContact = key; }
             }
           },
-          async delete() { await ref.delete(); if (m[1] === uid) { try { await base.doc('contacts/' + m[1]).delete(); } catch (e) {} lastContact = null; } },
+          async delete() {
+            await ref.delete();
+            if (m[1] === uid) {
+              try { await base.doc('contacts/' + m[1]).delete(); } catch (e) {}
+              try { await base.doc('private/' + m[1]).delete(); } catch (e) {}
+              lastContact = null; lastPrivate = null;
+            }
+          },
         };
       },
     };
@@ -321,6 +336,9 @@
       if (c.exists) { const d = c.data(); p.email = d.email || ''; p.phone = d.phone || ''; lastContact = JSON.stringify({ email: p.email, phone: p.phone }); }
       else if (p.email || p.phone) p._migrateContact = true;   // ältere Profile: Kontakt noch im öffentlichen Dokument
     } catch (e) {}
+    if (p.photoPublic === false) {
+      try { const pr = await db.doc('private/' + uid).get(); if (pr.exists) { p.photo = pr.data().photo || null; lastPrivate = p.photo || ''; } } catch (e) {}
+    }
     return p;
   }
   function genCode() {
@@ -477,12 +495,30 @@
 
   // ================= Profilbild =================
   let photoDraft;   // undefined = unverändert, null = löschen, String = neues Bild (nur vor der Registrierung)
-  function setAvatar(node, name, photo) {
+  function setAvatar(node, name, photo, opts = {}) {
     const ok = typeof photo === 'string' && photo.startsWith('data:image/');
+    const locked = !!opts.locked;
     node.textContent = initials(name);
-    node.style.backgroundImage = ok ? `url("${photo}")` : '';
-    node.classList.toggle('has-photo', ok);
+    node.style.backgroundImage = ok && !locked ? `url("${photo}")` : '';
+    node.classList.toggle('has-photo', ok && !locked);
+    node.classList.toggle('img-locked', locked);
+    node.classList.toggle('img-zoom', ok && !locked && opts.zoom !== false);
+    node.onclick = locked
+      ? e => { e.preventDefault(); e.stopPropagation(); flash('Dieses Profilbild ist privat – die Person hat es in ihren Einstellungen verborgen.', true); }
+      : ok && opts.zoom !== false ? e => { e.preventDefault(); e.stopPropagation(); openImage(photo, name); } : null;
   }
+  // Profilbild einer anderen Person: privat?
+  const photoLocked = m => !!m && m.uid !== uid && m.photoPublic === false;
+  // ----- Grosse Bildansicht -----
+  function openImage(src, title) {
+    $('imgBig').src = src; $('imgTitle').textContent = title || '';
+    $('imgModal').classList.remove('hidden');
+  }
+  const closeImage = () => { $('imgModal').classList.add('hidden'); $('imgBig').removeAttribute('src'); };
+  $('imgX').addEventListener('click', closeImage);
+  $('imgBack').addEventListener('click', closeImage);
+  $('imgModal').addEventListener('click', e => { if (e.target === $('imgModal')) closeImage(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('imgModal').classList.contains('hidden')) closeImage(); });
   const currentPhoto = () => photoDraft !== undefined ? photoDraft : (profile && profile.photo) || null;
   function renderPhoto() {
     const ph = currentPhoto();
@@ -540,7 +576,7 @@
     Object.keys(editRoles).sort().forEach(k => { roles[k] = [...editRoles[k]].sort(); });
     const code = $('fCode').value.trim(), bname = $('fBandName').value.trim();
     const nb = newBandMode !== 'none' && (code || bname || newRoles.size) ? [newBandMode, code, bname, [...newRoles].sort().join(',')].join('|') : '';
-    return JSON.stringify({ n: $('fName').value.trim(), fn: $('fFirst').value.trim(), ln: $('fLast').value.trim(), t: $('fTerms').checked, e: $('fEmail').value.trim(), p: $('fPhone').value.trim(), ph: currentPhoto() || null, r: roles, nb });
+    return JSON.stringify({ pp: $('fPhotoPublic').checked, n: $('fName').value.trim(), fn: $('fFirst').value.trim(), ln: $('fLast').value.trim(), t: $('fTerms').checked, e: $('fEmail').value.trim(), p: $('fPhone').value.trim(), ph: currentPhoto() || null, r: roles, nb });
   }
   const isProfileDirty = () => !!profile && !!profileSnap && !$('app').classList.contains('hidden') && profileState() !== profileSnap;
   ['input', 'change', 'click'].forEach(ev => form.addEventListener(ev, () => setTimeout(updateDirty, 0)));
@@ -557,6 +593,7 @@
     $('fTerms').checked = false;
     $('termsWrap').classList.toggle('hidden', !needsTerms());
     regTag = ''; mountRegTag();
+    $('fPhotoPublic').checked = !(profile && profile.photoPublic === false);
     $('puidRow').classList.toggle('hidden', !(profile && profile.puid));
     $('puidVal').textContent = (profile && profile.puid) || ''; $('puidVal').classList.add('hidden'); $('puidBtn').textContent = 'PUID anzeigen';
     $('fPhone').value = profile?.phone || '';
@@ -673,6 +710,7 @@
       const p = profile ? clone(profile) : { createdAt: now, bandIds: [], memberships: {} };
       if (!p.puid) p.puid = await newPuid();
       p.nickKey = nickKey(name);
+      p.photoPublic = $('fPhotoPublic').checked;
       p.name = name; p.firstName = firstName; p.lastName = lastName; p.email = email; p.phone = phone; p.updatedAt = now;
       if (acceptTerms) p.terms = { version: LEGAL_VERSION, acceptedAt: now };
       if (photoDraft !== undefined) { if (photoDraft) p.photo = photoDraft; else delete p.photo; }
@@ -843,7 +881,7 @@
     const b = bands[id], sh = showOf(b);
     const card = el('button', 'bov-card' + (id === profile.lastBand ? ' last' : '')); card.type = 'button';
     const lg = el('span', 'bov-logo');
-    if (sh.logo && b.cfg.logo) lg.appendChild(logoNode(b.cfg.logo)); else lg.appendChild(defaultLogo());
+    fillBandLogo(lg, id, { canSee: isFounder(id) || (b.verwalter || []).includes(uid) });
     const txt = el('span', 'bov-txt');
     const title = el('span', 'bov-name');
     // Sichtbarkeit der Band gilt auch hier; ist gar nichts sichtbar, bleibt der Name stehen
@@ -921,7 +959,7 @@
     renderBandList();
     renderBrandLogo();
     loadEvents();
-    setAvatar($('appAvatar'), profile.name, profile.photo);
+    setAvatar($('appAvatar'), profile.name, profile.photo, { zoom: false });
     const an = $('appName'); an.innerHTML = ''; an.append(profile.name);
     bandIdsOf(profile).forEach(id => { const b = bands[id]; if (b && b.tag && showOf(b).tag) an.append(tagChip(b.tag)); });
     $('appRole').textContent = 'Profil und Bands';
@@ -1002,7 +1040,7 @@
     $('page-checklist').classList.toggle('hidden', page !== 'page4');
     if (page === 'page4') renderChecklistPage();
     $('page-finance').classList.toggle('hidden', page !== 'page5');
-    if (page === 'page5') openFinance();
+    if (page === 'page5') { openFinance(); $('buildModal').classList.remove('hidden'); }
     $('page-calendar').classList.toggle('hidden', page !== 'page2');
     if (page === 'page2') renderCalendar(0);
     if (page === 'profile' && !isProfileDirty()) prepareForm();
@@ -1324,7 +1362,7 @@
     const head = el('button', 'mcard-head'); head.type = 'button';
     head.setAttribute('aria-expanded', expanded.has(key));
     const av = el('div', 'mavatar' + (opts.isDefault ? ' def' : ''), opts.isDefault ? '★' : initials(opts.name));
-    if (opts.photo) setAvatar(av, opts.name, opts.photo);
+    if (opts.photo || opts.locked) setAvatar(av, opts.name, opts.photo, { locked: opts.locked });
     const info = el('div', 'minfo');
     const nm = el('div', 'mname', opts.name);
     (opts.badges || []).forEach(b => nm.appendChild(b));
@@ -1706,6 +1744,30 @@
   document.addEventListener('click', () => $('ovMenu').classList.add('hidden'));
   ovCheckLocation(false);
 
+  // ----- Profil & Bands: Bereiche auf- und zuklappen (nur in der App, nicht bei der Registrierung) -----
+  (() => {
+    let folded = {};
+    try { folded = JSON.parse(ls.get('bandFolded') || '{}') || {}; } catch (e) {}
+    const save = () => { try { ls.set('bandFolded', JSON.stringify(folded)); } catch (e) {} };
+    const blocks = () => [...document.querySelectorAll('#profileForm .pf-fold')];
+    blocks().forEach(b => {
+      const key = b.dataset.foldKey, h = b.querySelector(':scope > .section-title');
+      if (!h) return;
+      if (folded[key]) b.classList.add('folded');
+      h.classList.add('pf-head'); h.title = 'Auf- und zuklappen';
+      h.addEventListener('click', () => {
+        if (!$('profileForm').closest('#page-profile')) return;
+        b.classList.toggle('folded'); folded[key] = b.classList.contains('folded'); save();
+      });
+    });
+    document.querySelectorAll('[data-pf-all]').forEach(btn => btn.addEventListener('click', () => {
+      const close = btn.dataset.pfAll === 'close';
+      blocks().forEach(b => { b.classList.toggle('folded', close); folded[b.dataset.foldKey] = close; });
+      document.querySelectorAll('#accountCard details').forEach(d => { d.open = !close; });
+      save();
+    }));
+  })();
+
   // ----- Fenster in Verwaltung und Einstellungen auf- und zuklappen (Zustand pro Browser gemerkt) -----
   (() => {
     let folded = {};
@@ -1729,6 +1791,20 @@
       try { ls.set('bandFolded', JSON.stringify(folded)); } catch (e) {}
     }));
   })();
+
+  // ================= Finanzen: befindet sich im Bau =================
+  const FIN_LOCK = 'Finanzen befinden sich im Bau – diese Funktion ist noch gesperrt.';
+  $('buildOk').addEventListener('click', () => $('buildModal').classList.add('hidden'));
+  $('buildModal').addEventListener('click', e => { if (e.target === $('buildModal')) $('buildModal').classList.add('hidden'); });
+  $('page-finance').classList.add('fin-locked');
+  $('page-finance').addEventListener('click', e => {
+    const t = e.target.closest('button, select, input, a, .fin-row, label');
+    if (!t) return;
+    e.preventDefault(); e.stopPropagation(); flash(FIN_LOCK, true);
+  }, true);
+  ['mousedown', 'keydown', 'change', 'focusin'].forEach(ev => $('page-finance').addEventListener(ev, e => {
+    if (e.target.closest('select, input')) { e.preventDefault(); if (ev === 'focusin') e.target.blur(); }
+  }, true));
 
   // ================= Finanzen (Seite 5) =================
   // Gespeichert unter finance/<Band>/entries/<id>: { type: 'in'|'out', amount, date, title, cat, gigId, note, createdBy, ... }
@@ -2069,7 +2145,7 @@
 
       const extra = admin && !draftIsAdmin(m.uid) ? permSummary(m) : '';
       const summary = [roles.join(', ') || 'Keine Rolle', extra].filter(Boolean).join(' · ');
-      const { card, body } = makeCard('m:' + m.uid, { name: m.name || 'Unbekannt', badges, summary, photo: typeof m.photo === 'string' && m.photo.startsWith('data:image/') ? m.photo : null });
+      const { card, body } = makeCard('m:' + m.uid, { name: m.name || 'Unbekannt', badges, summary, locked: photoLocked(m), photo: typeof m.photo === 'string' && m.photo.startsWith('data:image/') ? m.photo : null });
       const contact = contactBox(m);
 
       if (rolesMgr) {
@@ -2448,12 +2524,20 @@
   function logoNode(src) {
     const img = el('img'); img.src = src; img.alt = 'Bandlogo'; return img;
   }
-  function renderBrandLogo() {
-    const box = $('brandLogo'); box.innerHTML = '';
-    const lg = bands[currentBand] && showOf(bands[currentBand]).logo && bands[currentBand].cfg.logo;
-    if (lg) { box.classList.add('custom'); box.appendChild(logoNode(lg)); }
-    else { box.classList.remove('custom'); box.appendChild(defaultLogo()); }
+  // Bandlogo anzeigen: verborgen = verschwommen mit Schloss (nur wer es bearbeiten darf, sieht es klar)
+  function fillBandLogo(box, bandId, { canSee } = {}) {
+    box.innerHTML = '';
+    const b = bands[bandId], lg = b && b.cfg.logo;
+    const hidden = !!lg && !showOf(b).logo && !(canSee !== undefined ? canSee : canRoles(bandId));
+    box.classList.toggle('custom', !!lg);
+    box.classList.toggle('img-locked', hidden);
+    box.classList.toggle('img-zoom', !!lg && !hidden);
+    box.appendChild(lg ? logoNode(lg) : defaultLogo());
+    box.onclick = hidden
+      ? e => { e.preventDefault(); e.stopPropagation(); flash('Dieses Bandlogo ist privat – die Band hat es in ihren Einstellungen verborgen.', true); }
+      : lg ? e => { e.preventDefault(); e.stopPropagation(); openImage(lg, b.name); } : null;
   }
+  function renderBrandLogo() { fillBandLogo($('brandLogo'), currentBand); }
   function renderLogoPanel() {
     const can = canRoles(currentBand);
     const lg = draft && draftBand === currentBand ? draft.logo : (bands[currentBand] && bands[currentBand].cfg.logo);
@@ -3679,6 +3763,7 @@
     const m = gigMembers.find(x => x.uid === u) || (u === uid ? profile : null); return m ? (m.name || 'Unbekannt') : 'Ehemaliges Mitglied';
   };
   let clMenu = null;   // offenes Zuweisungs-Menü
+  const clLocked = u => photoLocked(gigMembers.find(x => x.uid === u));
   const clPhoto = u => { const m = gigMembers.find(x => x.uid === u) || (u === uid ? profile : null); return m && typeof m.photo === 'string' && m.photo.startsWith('data:image/') ? m.photo : null; };
   // Änderung frisch aus der Datenbank lesen, anpassen und speichern (damit gleichzeitige Änderungen nicht verloren gehen)
   async function clMutate(evId, dk, fn) {
@@ -4079,7 +4164,7 @@
       ppl.appendChild(el('span', 'cl-who', mem.length ? 'Übernommen von:' : 'Noch niemand übernimmt das'));
       mem.forEach(u => {
         const chip = el('span', 'cl-person' + (u === me ? ' me' : ''));
-        const av = el('span', 'avatar'); setAvatar(av, clName(u), clPhoto(u));
+        const av = el('span', 'avatar'); setAvatar(av, clName(u), clPhoto(u), { locked: clLocked(u) });
         chip.append(av, el('span', null, clName(u) + (u === me ? ' (du)' : '')));
         if (mgr || u === me) {
           const x = el('button', 'cl-x', '✕'); x.type = 'button'; x.title = u === me ? 'Doch nicht – mich austragen' : clName(u) + ' austragen';
@@ -4110,7 +4195,7 @@
         people.forEach(pp => {
           const lab = el('label', 'cl-menu-row');
           const cb = el('input'); cb.type = 'checkbox'; cb.checked = mem.includes(pp.uid);
-          const av = el('span', 'avatar'); setAvatar(av, pp.name, pp.pending ? null : clPhoto(pp.uid));
+          const av = el('span', 'avatar'); setAvatar(av, pp.name, pp.pending ? null : clPhoto(pp.uid), { locked: !pp.pending && clLocked(pp.uid) });
           lab.append(cb, av, el('span', 'cl-menu-name', pp.name + (pp.uid === me ? ' (du)' : '')));
           if (pp.pending) lab.appendChild(el('span', 'cl-menu-tag', 'nicht registriert'));
           cb.addEventListener('click', e => {
@@ -4891,6 +4976,9 @@
       { icon: '⚙️', title: 'Einstellungen', text: 'Unten links: Darstellung (Hell, Dunkel, Automatisch), Mauszeiger, Uhr & Datum, Sichtbarkeit deiner Kontaktangaben pro Band und die Sortierung der Checkliste.' },
       { icon: '🚧', title: 'Pre-Alpha', text: 'Stagemate ist noch in einer frühen Pre-Alpha-Version und verändert sich laufend. Die aktuelle Versionsnummer steht ganz unten links. Der Hinweis dazu erscheint jedes Mal auf dem Anmeldebildschirm und lässt sich dort über das Abzeichen „Pre-Alpha“ wieder öffnen.' },
       { icon: '💬', title: 'Support', text: 'Unten links „Support“ öffnet ein Fenster mit den Links zu Instagram und TikTok (housi_666) – für Fragen, Probleme oder Ideen.' },
+      { icon: '🔍', title: 'Bilder gross ansehen', text: 'Ein Klick auf ein Profilbild oder Bandlogo zeigt es gross an. Verborgene Bilder sind verschwommen und mit einem Schloss markiert.' },
+      { icon: '🙈', title: 'Profilbild verbergen', text: 'Unter „Profil & Bands“ beim Profilbild „Für andere sichtbar“ ausschalten. Andere sehen dann nur noch ein verschwommenes Bild mit Schloss.' },
+      { icon: '🚧', title: 'Finanzen', text: 'Die Finanzen befinden sich im Bau. Du kannst dich umsehen, die Funktionen sind aber noch gesperrt.' },
       { icon: '🎸', title: 'Deine Bands', text: 'Nach dem Anmelden siehst du alle deine Bands mit Logo, Tag und deinen Rollen. Ein Klick öffnet die Band; die zuletzt geöffnete steht zuoberst.' },
       { icon: '👁', title: 'Passwort ansehen', text: 'Das Auge im Passwortfeld gedrückt halten – solange du drückst, siehst du das Passwort im Klartext.' },
       { icon: '🔐', title: 'Konto', text: 'Web-Version: Unter „Profil & Bands“ → „Konto“ änderst du dein Passwort oder löschst dein Konto. Gründer/Admins lösen vorher ihre Band auf.' },
