@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.4 · Build 26 · 2026-11-16 */
+/*! Stagemate v0.4.5 · Build 27 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -16,6 +16,7 @@
     { id: 'page4', title: 'Checkliste' },
     { id: 'page5', title: 'Finanzen' },
     { id: 'page6', title: 'Setlist' },
+    { id: 'page7', title: 'Songs' },
   ];
   const LEVELS = { edit: 'Bearbeiten', read: 'Nur lesen', hidden: 'Ausgeblendet' };
   const PAGE_TITLES = { home: 'Startbildschirm', overview: 'Übersicht', profile: 'Profil & Bands', team: 'Verwaltung', settings: 'Einstellungen' };
@@ -1112,7 +1113,7 @@
     if (page === 'profile') renderAccount();
     $('page-team').classList.toggle('hidden', page !== 'team');
     $('page-settings').classList.toggle('hidden', page !== 'settings');
-    $('page-placeholder').classList.toggle('hidden', !reg || page === 'page2' || page === 'page3' || page === 'page4' || page === 'page5' || page === 'page6');
+    $('page-placeholder').classList.toggle('hidden', !reg || page === 'page2' || page === 'page3' || page === 'page4' || page === 'page5' || page === 'page6' || page === 'page7');
     $('page-gigs').classList.toggle('hidden', page !== 'page3');
     if (page === 'page3') renderGigs();
     $('page-checklist').classList.toggle('hidden', page !== 'page4');
@@ -1121,6 +1122,8 @@
     if (page === 'page5') { openFinance(); $('buildModal').classList.remove('hidden'); }
     $('page-setlist').classList.toggle('hidden', page !== 'page6');
     if (page === 'page6') openSetlist();
+    $('page-songs').classList.toggle('hidden', page !== 'page7');
+    if (page === 'page7') openSongs();
     $('page-calendar').classList.toggle('hidden', page !== 'page2');
     if (page === 'page2') renderCalendar(0);
     if (page === 'profile' && !isProfileDirty()) prepareForm();
@@ -2333,44 +2336,53 @@
     }));
   })();
 
-  // ================= Setlist (Seite 6) =================
-  // Setlists: setlists/<Band>/lists/<id> { name, gigId, start, targetMin, items:[{id,type,title,artist,dur,key,bpm,note}] }
-  // Song-Bibliothek: songs/<Band>/items/<id> { title, artist, dur, key, bpm, note }
+  // ================= Setlist (Seite 6) und Songs (Seite 7) =================
+  // Setlists: setlists/<Band>/lists/<id> { name, gigId, start, targetMin, dupAck, items:[{id,type,title,artist,relType,album,year,genre,dur,key,bpm,note}] }
+  // Songs: songs/<Band>/items/<id> { title, artist, relType, album, year, genre, dur, key, bpm, note }
   const SL_TYPES = {
     song: { label: 'Song', icon: '🎵', dur: 240 }, intro: { label: 'Intro', icon: '▶️', dur: 60 }, outro: { label: 'Outro', icon: '⏹️', dur: 60 },
     zwischen: { label: 'Zwischenteil', icon: '〰️', dur: 60 }, pause: { label: 'Pause', icon: '☕', dur: 900 }, ansage: { label: 'Ansage', icon: '🎤', dur: 30 },
   };
-  let slPend = null, slLists = [], slSongs = [], slBand = null, slUnsubL = null, slUnsubS = null, slSel = null, slCtx = null, slSaveT = null;
+  const SL_REL = { album: 'Album', ep: 'EP', single: 'Single' };
+  const SL_GENRES = ['Rock', 'Pop', 'Punk', 'Metal', 'Blues', 'Jazz', 'Folk', 'Funk', 'Soul', 'Reggae', 'Country', 'Hip-Hop', 'Electronic', 'Schlager', 'Klassik'];
+  let slPend = null, slLists = [], slSongs = [], slBand = null, slUnsubL = null, slUnsubS = null, slSel = null, slView = 'list', slCtx = null, slSaveT = null;
+  let slSort = { by: 'name', dir: 1 }, songSort = { by: 'title', dir: 1 };
+  try { const v = JSON.parse(ls.get('slSort') || 'null'); if (v && v.by) slSort = v; const w = JSON.parse(ls.get('songSort') || 'null'); if (w && w.by) songSort = w; } catch (e) {}
   const slCan = () => levelFor(currentBand, 'page6') === 'edit' && !viewAs;
+  const songCan = () => levelFor(currentBand, 'page7') === 'edit' && !viewAs;
   const slDeny = () => previewBlocked(null, viewAs ? undefined : 'Keine Berechtigung: Du hast für die Setlist nur Leserechte. Bitte den Admin, dir das Recht „Bearbeiten“ zu geben.');
+  const songDeny = () => previewBlocked(null, viewAs ? undefined : 'Keine Berechtigung: Du hast für die Songs nur Leserechte. Bitte den Admin, dir das Recht „Bearbeiten“ zu geben.');
   const slId = () => 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const slFmt = s => { s = Math.max(0, Math.round(s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + pad2(m) : m) + ':' + pad2(x); };
   const slParse = t => { t = String(t || '').trim().replace(',', '.'); if (!t) return 0; if (t.includes(':')) { const p = t.split(':').map(Number); return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : (p[0] || 0) * 60 + (p[1] || 0); } return Math.round((parseFloat(t) || 0) * 60); };
   const slClock = (startMin, sec) => { const t = Math.round(startMin + sec / 60) % 1440; return pad2(Math.floor(t / 60)) + ':' + pad2(t % 60); };
   const slCur = () => slLists.find(l => l.id === slSel) || null;
   const slGigs = () => calEvents.filter(e => e.category === 'auftritt' && e.kind !== 'checklist' && e.date).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-  function openSetlist() {
-    if (slBand !== currentBand) {
-      slBand = currentBand; slLists = []; slSongs = [];
-      if (!slCfg[currentBand]) slLoadCfg(currentBand);
-      [slUnsubL, slUnsubS].forEach(u => { try { u && u(); } catch (e) {} }); slUnsubL = slUnsubS = null;
-      try { slSel = ls.get('slSel_' + currentBand) || null; } catch (e) { slSel = null; }
-      const cL = db.collection(`setlists/${currentBand}/lists`), cS = db.collection(`songs/${currentBand}/items`);
-      const bandAtStart = currentBand;
-      const aL = snap => { if (slBand !== bandAtStart) return; const keep = slPend && slLists.find(x => x.id === slPend); slLists = snap.docs.map(d => (keep && d.id === slPend ? keep : { id: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de')); if (currentPage === 'page6' && !slBusy()) renderSetlist(); };
-      const aS = snap => { if (slBand !== bandAtStart) return; slSongs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.title || '').localeCompare(b.title || '', 'de')); if (!$('slLibModal').classList.contains('hidden')) renderSlLib(); };
-      try { slUnsubL = cL.onSnapshot ? cL.onSnapshot(aL) : null; } catch (e) { slUnsubL = null; }
-      if (!slUnsubL) cL.get().then(aL).catch(() => {});
-      try { slUnsubS = cS.onSnapshot ? cS.onSnapshot(aS) : null; } catch (e) { slUnsubS = null; }
-      if (!slUnsubS) cS.get().then(aS).catch(() => {});
-    }
-    renderSetlist();
+  const slRelText = x => x.album ? (SL_REL[x.relType] || 'Album') + ': ' + x.album : '';
+  const slSongSub = x => [x.artist, slRelText(x), x.year || '', x.genre, x.key, x.bpm ? x.bpm + ' BPM' : ''].filter(Boolean).join(' · ');
+  // Verbindung zu den Daten der aktuellen Band (nur deren Setlists und Songs)
+  function slSub() {
+    if (slBand === currentBand) return;
+    slBand = currentBand; slLists = []; slSongs = []; slView = 'list';
+    if (!slCfg[currentBand]) slLoadCfg(currentBand);
+    [slUnsubL, slUnsubS].forEach(u => { try { u && u(); } catch (e) {} }); slUnsubL = slUnsubS = null;
+    try { slSel = ls.get('slSel_' + currentBand) || null; } catch (e) { slSel = null; }
+    const cL = db.collection(`setlists/${currentBand}/lists`), cS = db.collection(`songs/${currentBand}/items`);
+    const bandAtStart = currentBand;
+    const aL = snap => { if (slBand !== bandAtStart) return; const keep = slPend && slLists.find(x => x.id === slPend); slLists = snap.docs.map(d => (keep && d.id === slPend ? keep : { id: d.id, ...d.data() })); if (currentPage === 'page6' && !slBusy()) renderSetlist(); };
+    const aS = snap => { if (slBand !== bandAtStart) return; slSongs = snap.docs.map(d => ({ id: d.id, ...d.data() })); if (currentPage === 'page7') renderSongs(); if (!$('slLibModal').classList.contains('hidden')) renderSlLib(); };
+    try { slUnsubL = cL.onSnapshot ? cL.onSnapshot(aL) : null; } catch (e) { slUnsubL = null; }
+    if (!slUnsubL) cL.get().then(aL).catch(() => {});
+    try { slUnsubS = cS.onSnapshot ? cS.onSnapshot(aS) : null; } catch (e) { slUnsubS = null; }
+    if (!slUnsubS) cS.get().then(aS).catch(() => {});
   }
+  function openSetlist() { slSub(); slView = 'list'; renderSetlist(); }
+  function openSongs() { slSub(); renderSongs(); }
   const slBusy = () => { const a = document.activeElement; return !!(a && a.closest && a.closest('#slEditor') && /INPUT|TEXTAREA|SELECT/.test(a.tagName)); };
   function slSave(L) {
-    clearTimeout(slSaveT); slPend = L.id;
+    clearTimeout(slSaveT); slPend = L.id; L.updatedAt = new Date().toISOString();
     slSaveT = setTimeout(() => {
-      const d = clone(L); delete d.id; d.updatedAt = new Date().toISOString();
+      const d = clone(L); delete d.id;
       db.collection(`setlists/${slBand}/lists`).doc(L.id).set(d).catch(() => flash('Setlist konnte nicht gespeichert werden', true));
       setTimeout(() => { if (slPend === L.id) slPend = null; }, 1500);
     }, 400);
@@ -2380,7 +2392,7 @@
     const base = hasStart ? h * 60 + (m || 0) : 0; let t = 0, n = 0;
     return { hasStart, rows: (L.items || []).map(it => { const r = { it, at: t, num: it.type === 'song' ? ++n : 0, clock: hasStart ? slClock(base, t) : '' }; t += it.dur || 0; return r; }), total: t, base };
   }
-  // Titel, die in einer Setlist mehrfach vorkommen dürfen (Standard; später pro Band einstellbar)
+  // Titel, die in einer Setlist mehrfach vorkommen dürfen (pro Band einstellbar, Standard)
   const SL_DUP_DEFAULT = ['intro', 'interlude', 'break', 'outro'];
   const slCfg = {};   // Band -> Wörter
   const slWords = () => slCfg[currentBand] || SL_DUP_DEFAULT;
@@ -2410,54 +2422,76 @@
   });
   $('slWordNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('slWordAdd').click(); } });
   $('slWordReset').addEventListener('click', () => slSaveWords(SL_DUP_DEFAULT.slice()));
-  function slDups(L) {
-    const seen = new Map(), out = new Set();
+  // Doppelte Titel: ids, Titel und eine Signatur (damit eine bestätigte Warnung bei neuen Doppelten wieder auslöst)
+  function slDupInfo(L) {
+    const seen = new Map(), ids = new Set(), titles = new Set();
     (L.items || []).forEach(it => {
       if (it.type !== 'song') return;
       const t = (it.title || '').trim().toLowerCase(); if (!t) return;
       if (slWords().some(w => t.split(/[^a-zäöü0-9]+/).includes(w.toLowerCase()))) return;
-      if (seen.has(t)) { out.add(seen.get(t)); out.add(it.id); } else seen.set(t, it.id);
+      if (seen.has(t)) { ids.add(seen.get(t)); ids.add(it.id); titles.add(it.title.trim()); } else seen.set(t, it.id);
     });
-    return out;
+    const sig = [...titles].map(x => x.toLowerCase()).sort().join('|');
+    return { ids, titles: [...titles], sig, active: ids.size > 0 && sig !== (L.dupAck || '') };
   }
   function renderSetlist() {
-    const can = slCan();
-    const sel = $('slSelect'); sel.innerHTML = '';
-    slLists.forEach(l => sel.appendChild(new Option(l.name || 'Ohne Namen', l.id)));
-    if (!slLists.some(l => l.id === slSel)) slSel = slLists[0] ? slLists[0].id : null;
-    sel.value = slSel || ''; sel.classList.toggle('hidden', !slLists.length);
-    ['slNew', 'slDup', 'slDel'].forEach(id => $(id).classList.toggle('pv-locked', !can));
-    $('slDup').classList.toggle('hidden', !slLists.length); $('slDel').classList.toggle('hidden', !slLists.length);
     const L = slCur();
-    $('slEmpty').classList.toggle('hidden', !!L); $('slEditor').classList.toggle('hidden', !L);
-    if (!L) return;
+    if (slView === 'edit' && !L) slView = 'list';
+    $('slListView').classList.toggle('hidden', slView !== 'list'); $('slEditView').classList.toggle('hidden', slView !== 'edit');
+    if (slView === 'list') renderSlList(); else renderSlEdit(L);
+  }
+  const slTot = L => { let t = 0, n = 0; (L.items || []).forEach(i => { t += i.dur || 0; if (i.type === 'song') n++; }); return { t, n }; };
+  function renderSlList() {
+    const can = slCan(), gigs = slGigs();
+    $('slNew').classList.toggle('pv-locked', !can);
+    $('slSortBy').value = slSort.by; $('slSortDir').textContent = slSort.dir > 0 ? '↑ aufsteigend' : '↓ absteigend';
+    const gd = L => { const g = gigs.find(e => e.id === L.gigId); return g ? g.date : ''; };
+    const key = { name: L => (L.name || '').toLowerCase(), gig: L => gd(L) || '￿', dur: L => slTot(L).t, songs: L => slTot(L).n, upd: L => L.updatedAt || '' }[slSort.by];
+    const list = slLists.slice().sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * slSort.dir || (a.name || '').localeCompare(b.name || '', 'de'); });
+    $('slEmpty').classList.toggle('hidden', !!slLists.length); $('slSortBar').classList.toggle('hidden', !slLists.length);
+    const box = $('slCards'); box.innerHTML = '';
+    list.forEach(L => {
+      const c = el('button', 'sl-card'); c.type = 'button';
+      const g = gigs.find(e => e.id === L.gigId), T = slTot(L), di = slDupInfo(L);
+      c.append(el('div', 'slc-name', L.name || 'Ohne Namen'),
+        el('div', 'slc-gig', g ? `🎤 ${g.title || 'Gig'} · ${fmtDateOv(parseKey(g.date), ovCfg().date)}` : 'Kein Gig zugewiesen'),
+        el('div', 'slc-meta', `${T.n} ${T.n === 1 ? 'Song' : 'Songs'} · Gesamt ${slFmt(T.t)}${L.targetMin ? ' · Soll ' + L.targetMin + ' Min.' : ''}`));
+      if (di.active) c.append(el('div', 'slc-warn', '⚠ Doppelte Titel'));
+      c.addEventListener('click', () => { slSel = L.id; slView = 'edit'; try { ls.set('slSel_' + currentBand, slSel); } catch (e) {} renderSetlist(); window.scrollTo(0, 0); });
+      box.appendChild(c);
+    });
+  }
+  function renderSlEdit(L) {
+    const can = slCan();
+    ['slDup', 'slDel'].forEach(id => $(id).classList.toggle('pv-locked', !can));
     $('slName').value = L.name || ''; $('slStart').value = L.start || ''; $('slTarget').value = L.targetMin || '';
     ['slName', 'slStart', 'slTarget', 'slGig'].forEach(id => { $(id).disabled = !can; });
     const g = $('slGig'); g.innerHTML = ''; g.appendChild(new Option('– kein Gig –', ''));
     slGigs().forEach(e => g.appendChild(new Option(`${fmtDateOv(parseKey(e.date), ovCfg().date)} · ${e.title || 'Gig'}`, e.id)));
     if (L.gigId && !slGigs().some(e => e.id === L.gigId)) g.appendChild(new Option('(Gig nicht mehr vorhanden)', L.gigId));
     g.value = L.gigId || '';
-    const T = slTimes(L);
+    const T = slTimes(L), di = slDupInfo(L);
     const sum = $('slSum'); sum.innerHTML = '';
     const nSongs = T.rows.filter(r => r.num).length;
     const stat = (k, v, cls) => { const d = el('div', 'sl-stat' + (cls ? ' ' + cls : '')); d.append(el('div', 'sk', k), el('div', 'sv', v)); sum.appendChild(d); };
     stat(nSongs === 1 ? 'Song' : 'Songs', String(nSongs)); stat('Elemente', String(L.items.length)); stat('Gesamt', slFmt(T.total));
     if (T.hasStart && L.items.length) stat('Ende', slClock(T.base, T.total));
     if (L.targetMin) { const diff = T.total - L.targetMin * 60, ok = Math.abs(diff) <= 30; stat('Soll ' + L.targetMin + ' Min.', ok ? 'passt' : diff > 0 ? slFmt(diff) + ' zu lang' : slFmt(-diff) + ' zu kurz', ok ? 'ok' : diff > 0 ? 'over' : 'under'); }
-    const dups = [...new Set([...slDups(L)].map(id => (L.items.find(x => x.id === id) || {}).title))];
-    if (dups.length) stat('Doppelt', '⚠ ' + dups.join(', '), 'over');
+    const wb = el('button', 'sl-dupbtn ' + (di.active ? 'on' : 'off'), di.active ? '⚠ DOPPELT: ' + di.titles.join(', ') : 'KEINE WARNUNG'); wb.type = 'button';
+    wb.title = di.active ? 'Klicken, um die Warnung auszuschalten – bei einem neuen doppelten Titel erscheint sie wieder' : 'Keine aktive Warnung';
+    wb.addEventListener('click', () => { if (!di.active) return; if (!slCan()) return slDeny(); L.dupAck = di.sig; slSave(L); renderSetlist(); });
+    sum.appendChild(wb);
     const bar = $('slAddBar'); bar.innerHTML = '';
-    Object.entries(SL_TYPES).forEach(([k, v]) => { const b = el('button', 'btn small ghost' + (can ? '' : ' pv-locked'), `${v.icon} ${v.label}`); b.type = 'button'; b.addEventListener('click', () => can ? slOpenItem(-1, k) : slDeny()); bar.appendChild(b); });
-    const lb = el('button', 'btn small' + (can ? '' : ' pv-locked'), '+ aus Bibliothek'); lb.type = 'button'; lb.addEventListener('click', () => can ? openSlLib() : slDeny()); bar.appendChild(lb);
+    Object.entries(SL_TYPES).filter(([k]) => k !== 'song').forEach(([k, v]) => { const b = el('button', 'btn small ghost' + (can ? '' : ' pv-locked'), `${v.icon} ${v.label}`); b.type = 'button'; b.addEventListener('click', () => can ? slOpenItem(-1, k) : slDeny()); bar.appendChild(b); });
+    const lb = el('button', 'btn small' + (can ? '' : ' pv-locked'), '🎵 Song hinzufügen oder erstellen'); lb.type = 'button'; lb.addEventListener('click', () => can ? openSlLib() : slDeny()); bar.prepend(lb);
     const box = $('slItems'); box.innerHTML = '';
     if (!L.items.length) box.appendChild(el('div', 'mnote', 'Noch leer. Füge oben Songs, Intro, Pausen oder Ansagen hinzu.'));
-    const dupIds = slDups(L);
     T.rows.forEach((r, i) => {
-      const it = r.it, ty = SL_TYPES[it.type] || SL_TYPES.song;
-      const row = el('div', 'sl-row sl-t-' + it.type + (dupIds.has(it.id) ? ' sl-dup' : '')); row.dataset.cid = it.id;
+      const it = r.it, ty = SL_TYPES[it.type] || SL_TYPES.song, dup = di.active && di.ids.has(it.id);
+      const row = el('div', 'sl-row sl-t-' + it.type + (dup ? ' sl-dup' : '')); row.dataset.cid = it.id;
       const grip = el('span', 'sl-grip', '⠿'); grip.title = 'Ziehen zum Verschieben';
-      const main = el('div', 'sl-main'); main.append(el('div', 'sl-title', (dupIds.has(it.id) ? '⚠ ' : '') + (it.title || ty.label)));
-      const sub = [it.artist, it.album, it.year || '', it.key, it.bpm ? it.bpm + ' BPM' : '', it.note].filter(Boolean).join(' · '); if (sub) main.append(el('div', 'sl-sub', sub));
+      const main = el('div', 'sl-main'); main.append(el('div', 'sl-title', (dup ? '⚠ ' : '') + (it.title || ty.label)));
+      const sub = [slSongSub(it), it.note].filter(Boolean).join(' · '); if (sub) main.append(el('div', 'sl-sub', sub));
       row.append(grip, el('span', 'sl-num', r.num ? String(r.num) : ty.icon), el('span', 'sl-clock', r.clock || slFmt(r.at)), main, el('span', 'sl-dur', slFmt(it.dur)));
       row.addEventListener('click', e => { if (e.target.closest('.sl-grip')) return; can ? slOpenItem(i) : slDeny(); });
       if (can) slDrag(row, grip, box);
@@ -2489,103 +2523,139 @@
     if (!slCan()) return slDeny();
     const ref = db.collection(`setlists/${currentBand}/lists`).doc();
     const base = copyFrom ? clone(copyFrom) : { name: 'Neue Setlist', gigId: '', start: '', targetMin: 0, items: [] };
-    delete base.id; if (copyFrom) { base.name = (copyFrom.name || 'Setlist') + ' (Kopie)'; base.gigId = ''; base.items = base.items.map(x => ({ ...x, id: slId() })); }
+    delete base.id; if (copyFrom) { base.name = (copyFrom.name || 'Setlist') + ' (Kopie)'; base.gigId = ''; base.dupAck = ''; base.items = base.items.map(x => ({ ...x, id: slId() })); }
     base.createdBy = uid; base.updatedAt = new Date().toISOString();
-    slLists.push({ id: ref.id, ...base }); slSel = ref.id; try { ls.set('slSel_' + currentBand, slSel); } catch (e) {}
+    slLists.push({ id: ref.id, ...base }); slSel = ref.id; slView = 'edit'; try { ls.set('slSel_' + currentBand, slSel); } catch (e) {}
     renderSetlist(); if (!copyFrom) { $('slName').focus(); $('slName').select(); }
     try { await ref.set(base); } catch (e) { flash('Setlist konnte nicht gespeichert werden', true); }
   }
   $('slNew').addEventListener('click', () => slNewList());
   $('slDup').addEventListener('click', () => { const L = slCur(); if (L) slNewList(L); });
+  $('slToList').addEventListener('click', () => { slView = 'list'; renderSetlist(); });
   $('slDel').addEventListener('click', async () => {
     const L = slCur(); if (!L) return; if (!slCan()) return slDeny();
     if (!confirm(`Setlist „${L.name || 'Ohne Namen'}“ wirklich löschen?`)) return;
-    slLists = slLists.filter(x => x.id !== L.id); slSel = null; renderSetlist();
+    slLists = slLists.filter(x => x.id !== L.id); slSel = null; slView = 'list'; renderSetlist();
     try { await db.collection(`setlists/${currentBand}/lists`).doc(L.id).delete(); flash('Setlist gelöscht'); } catch (e) { flash('Löschen fehlgeschlagen', true); }
   });
-  $('slSelect').addEventListener('change', () => { slSel = $('slSelect').value; try { ls.set('slSel_' + currentBand, slSel); } catch (e) {} renderSetlist(); });
-  const slField = (id, fn) => $(id).addEventListener('input', () => { const L = slCur(); if (!L || !slCan()) return; fn(L, $(id).value); slSave(L); if (id !== 'slName') renderSetlistKeep(); else { const o = [...$('slSelect').options].find(x => x.value === L.id); if (o) o.textContent = L.name || 'Ohne Namen'; } });
-  const renderSetlistKeep = () => { const a = document.activeElement, id = a && a.id, v = a && a.value; renderSetlist(); if (id && $(id)) { $(id).focus(); } };
+  $('slSortBy').addEventListener('change', () => { slSort.by = $('slSortBy').value; try { ls.set('slSort', JSON.stringify(slSort)); } catch (e) {} renderSetlist(); });
+  $('slSortDir').addEventListener('click', () => { slSort.dir = -slSort.dir; try { ls.set('slSort', JSON.stringify(slSort)); } catch (e) {} renderSetlist(); });
+  const slField = (id, fn) => $(id).addEventListener('input', () => { const L = slCur(); if (!L || !slCan()) return; fn(L, $(id).value); slSave(L); if (id !== 'slName') renderSetlistKeep(); });
+  const renderSetlistKeep = () => { const a = document.activeElement, id = a && a.id; renderSetlist(); if (id && $(id)) { $(id).focus(); } };
   slField('slName', (L, v) => { L.name = v; });
   slField('slStart', (L, v) => { L.start = v; });
   slField('slTarget', (L, v) => { L.targetMin = Math.max(0, parseInt(v, 10) || 0); });
   $('slGig').addEventListener('change', () => { const L = slCur(); if (!L || !slCan()) return; L.gigId = $('slGig').value; const e = calEvents.find(x => x.id === L.gigId); if (e && !L.start && e.start) L.start = e.start; slSave(L); renderSetlist(); });
-  // Element bearbeiten / hinzufügen
-  function slOpenItem(idx, type, lib) {
-    const L = slCur(); const isLib = !!lib;
+  // Element bearbeiten / hinzufügen (Setlist) oder Song bearbeiten (Seite Songs)
+  function slOpenItem(idx, type, lib, opts) {
+    const L = slCur(); const isLib = !!lib; const picker = !!(opts && opts.picker);
     const it = isLib ? (lib.id ? slSongs.find(s => s.id === lib.id) : null) : (idx >= 0 ? L.items[idx] : null);
     const ty = it ? (it.type || 'song') : (type || 'song');
-    slCtx = { idx, lib: isLib ? (lib.id || '') : null, isNew: !it };
+    slCtx = { idx, lib: isLib ? (lib.id || '') : null, isNew: !it, picker };
     const sel = $('slType'); sel.innerHTML = ''; Object.entries(SL_TYPES).forEach(([k, v]) => sel.appendChild(new Option(v.label, k))); sel.value = ty;
     $('slTypeField').classList.toggle('hidden', isLib);
-    $('slItemH').textContent = isLib ? (it ? 'Song bearbeiten' : 'Neuer Song') : (it ? 'Element bearbeiten' : SL_TYPES[ty].label + ' hinzufügen');
+    $('slItemH').textContent = isLib ? (it ? 'Song bearbeiten' : 'Neuer Song') : (it ? 'Element bearbeiten' : SL_TYPES[ty].label + (ty === 'song' ? ' erstellen' : ' hinzufügen'));
     $('slTitle').value = it ? (it.title || '') : (ty === 'song' ? '' : SL_TYPES[ty].label);
-    $('slArtist').value = it ? (it.artist || '') : ''; $('slAlbum').value = it ? (it.album || '') : ''; $('slYear').value = it && it.year ? it.year : ''; $('slDur').value = slFmt(it ? it.dur : SL_TYPES[ty].dur);
+    $('slArtist').value = it ? (it.artist || '') : ''; $('slRelType').value = it && it.relType ? it.relType : 'album'; $('slAlbum').value = it ? (it.album || '') : '';
+    $('slYear').value = it && it.year ? it.year : ''; $('slGenre').value = it ? (it.genre || '') : ''; $('slDur').value = slFmt(it ? it.dur : SL_TYPES[ty].dur);
     $('slKey').value = it ? (it.key || '') : ''; $('slBpm').value = it && it.bpm ? it.bpm : ''; $('slNote').value = it ? (it.note || '') : '';
-    $('slToLib').checked = false; $('slToLibWrap').classList.toggle('hidden', isLib || ty !== 'song' || !!it);
+    slRelHint();
+    const gl = $('slGenreList'); gl.innerHTML = ''; [...new Set([...SL_GENRES, ...slSongs.map(s => s.genre).filter(Boolean)])].sort((a, b) => a.localeCompare(b, 'de')).forEach(g => gl.appendChild(new Option(g)));
+    $('slToLib').checked = picker && songCan(); $('slToLibWrap').classList.toggle('hidden', isLib || ty !== 'song' || !!it || !songCan());
     $('slItemDel').classList.toggle('hidden', !it); $('slItemMsg').textContent = '';
-    $('slArtistField').classList.toggle('hidden', !isLib && ty !== 'song'); $('slAlbumField').classList.toggle('hidden', !isLib && ty !== 'song');
-    if (isLib) $('slLibModal').classList.add('hidden');
+    const song = isLib || ty === 'song';
+    $('slArtistField').classList.toggle('hidden', !song); $('slAlbumField').classList.toggle('hidden', !song);
+    if (picker) $('slLibModal').classList.add('hidden');
     $('slItemModal').classList.remove('hidden'); setTimeout(() => $('slTitle').focus(), 30);
   }
+  function slRelHint() { const t = $('slRelType').value; $('slAlbum').placeholder = 'Name ' + ({ album: 'des Albums', ep: 'der EP', single: 'der Single' }[t]); }
+  $('slRelType').addEventListener('change', slRelHint);
   $('slType').addEventListener('change', () => {
     const t = $('slType').value; $('slArtistField').classList.toggle('hidden', t !== 'song'); $('slAlbumField').classList.toggle('hidden', t !== 'song');
-    if (slCtx && slCtx.isNew) { const olds = Object.values(SL_TYPES).map(x => x.label); if (!$('slTitle').value || olds.includes($('slTitle').value)) $('slTitle').value = t === 'song' ? '' : SL_TYPES[t].label; $('slDur').value = slFmt(SL_TYPES[t].dur); $('slToLibWrap').classList.toggle('hidden', t !== 'song'); }
+    if (slCtx && slCtx.isNew) { const olds = Object.values(SL_TYPES).map(x => x.label); if (!$('slTitle').value || olds.includes($('slTitle').value)) $('slTitle').value = t === 'song' ? '' : SL_TYPES[t].label; $('slDur').value = slFmt(SL_TYPES[t].dur); $('slToLibWrap').classList.toggle('hidden', t !== 'song' || !songCan()); }
   });
-  const closeSlItem = () => { const wasLib = slCtx && slCtx.lib !== null; $('slItemModal').classList.add('hidden'); slCtx = null; if (wasLib) { $('slLibModal').classList.remove('hidden'); renderSlLib(); } };
-  ['slItemClose', 'slItemCancel'].forEach(id => $(id).addEventListener('click', closeSlItem));
-  $('slItemModal').addEventListener('click', e => { if (e.target === $('slItemModal')) closeSlItem(); });
+  const closeSlItem = (back) => { const ctx = slCtx; $('slItemModal').classList.add('hidden'); slCtx = null; if (back && ctx && ctx.picker) { $('slLibModal').classList.remove('hidden'); renderSlLib(); } };
+  ['slItemClose', 'slItemCancel'].forEach(id => $(id).addEventListener('click', () => closeSlItem(true)));
+  $('slItemModal').addEventListener('click', e => { if (e.target === $('slItemModal')) closeSlItem(true); });
   $('slItemSave').addEventListener('click', async () => {
     if (!slCtx) return;
     const type = slCtx.lib !== null ? 'song' : $('slType').value;
-    const data = { title: $('slTitle').value.trim(), artist: type === 'song' ? $('slArtist').value.trim() : '', album: type === 'song' ? $('slAlbum').value.trim() : '', year: type === 'song' ? (parseInt($('slYear').value, 10) || 0) : 0, dur: slParse($('slDur').value), key: $('slKey').value.trim(), bpm: Math.max(0, parseInt($('slBpm').value, 10) || 0), note: $('slNote').value.trim() };
+    const data = { title: $('slTitle').value.trim(), artist: type === 'song' ? $('slArtist').value.trim() : '', relType: type === 'song' ? $('slRelType').value : '', album: type === 'song' ? $('slAlbum').value.trim() : '', year: type === 'song' ? (parseInt($('slYear').value, 10) || 0) : 0, genre: type === 'song' ? $('slGenre').value.trim() : '', dur: slParse($('slDur').value), key: $('slKey').value.trim(), bpm: Math.max(0, parseInt($('slBpm').value, 10) || 0), note: $('slNote').value.trim() };
     if (!data.title && type === 'song') { $('slItemMsg').textContent = 'Bitte einen Titel eingeben.'; return; }
+    if (type === 'song' && !data.album) { $('slItemMsg').textContent = 'Bitte ' + ({ album: 'den Namen des Albums', ep: 'den Namen der EP', single: 'den Namen der Single' }[data.relType]) + ' eingeben.'; $('slAlbum').focus(); return; }
     if (!data.title) data.title = SL_TYPES[type].label;
     if (slCtx.lib !== null) {
+      if (!songCan()) return songDeny();
       const col = db.collection(`songs/${slBand}/items`), ref = slCtx.lib ? col.doc(slCtx.lib) : col.doc();
       try { await ref.set({ ...data, updatedAt: new Date().toISOString() }); } catch (e) { $('slItemMsg').textContent = 'Speichern fehlgeschlagen.'; return; }
       if (slCtx.lib) { const s = slSongs.find(x => x.id === slCtx.lib); if (s) Object.assign(s, data); } else if (!slSongs.some(x => x.id === ref.id)) slSongs.push({ id: ref.id, ...data });
-      slSongs.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'de')); closeSlItem(); renderSlLib(); return;
+      closeSlItem(); renderSongs(); return;
     }
     const L = slCur(); if (!L) return;
     if (slCtx.idx >= 0) L.items[slCtx.idx] = { ...L.items[slCtx.idx], type, ...data }; else L.items.push({ id: slId(), type, ...data });
     slSave(L);
-    if (type === 'song' && $('slToLib').checked && !slSongs.some(s => (s.title || '').toLowerCase() === data.title.toLowerCase() && (s.artist || '') === data.artist)) {
+    if (type === 'song' && $('slToLib').checked && songCan() && !slSongs.some(s => (s.title || '').toLowerCase() === data.title.toLowerCase() && (s.artist || '') === data.artist)) {
       const ref = db.collection(`songs/${slBand}/items`).doc(); if (!slSongs.some(x => x.id === ref.id)) slSongs.push({ id: ref.id, ...data }); ref.set({ ...data, updatedAt: new Date().toISOString() }).catch(() => {});
     }
     closeSlItem(); renderSetlist();
   });
   $('slItemDel').addEventListener('click', async () => {
     if (!slCtx) return;
-    if (slCtx.lib) { if (!confirm('Song aus der Bibliothek löschen? Setlists behalten ihre Einträge.')) return; slSongs = slSongs.filter(s => s.id !== slCtx.lib); try { await db.collection(`songs/${slBand}/items`).doc(slCtx.lib).delete(); } catch (e) {} closeSlItem(); renderSlLib(); return; }
+    if (slCtx.lib) { await songDelete(slCtx.lib); closeSlItem(); return; }
     const L = slCur(); if (!L || slCtx.idx < 0) return; L.items.splice(slCtx.idx, 1); slSave(L); closeSlItem(); renderSetlist();
   });
-  // Song-Bibliothek
+  // Songs: Sortierung und Liste (für die Seite „Songs“ und die Auswahl in der Setlist)
+  const SONG_SORTS = { title: x => x.title, artist: x => x.artist, album: x => x.album, year: x => x.year || 0, genre: x => x.genre, dur: x => x.dur || 0 };
+  function songsSorted(q, sort) {
+    const f = SONG_SORTS[sort.by] || SONG_SORTS.title;
+    return slSongs.filter(s => !q || ((s.title || '') + ' ' + (s.artist || '') + ' ' + (s.album || '') + ' ' + (s.genre || '')).toLowerCase().includes(q))
+      .sort((a, b) => { const x = f(a), y = f(b), c = typeof x === 'number' ? x - y : String(x || '').localeCompare(String(y || ''), 'de'); return (c * sort.dir) || (a.title || '').localeCompare(b.title || '', 'de'); });
+  }
+  async function songDelete(id) {
+    const s = slSongs.find(x => x.id === id); if (!songCan()) return songDeny();
+    if (!confirm('„' + ((s && s.title) || 'Song') + '“ aus den Songs löschen? Setlists behalten ihre Einträge.')) return;
+    slSongs = slSongs.filter(x => x.id !== id); renderSongs(); renderSlLib();
+    try { await db.collection(`songs/${slBand}/items`).doc(id).delete(); } catch (e) { flash('Löschen fehlgeschlagen', true); }
+  }
+  function songRow(s, mode) {
+    const r = el('div', 'sl-librow'), m = el('div', 'sl-main');
+    m.append(el('div', 'sl-title', s.title || 'Ohne Titel'), el('div', 'sl-sub', [slSongSub(s), slFmt(s.dur)].filter(Boolean).join(' · ')));
+    r.append(m);
+    if (mode === 'pick') {
+      const add = el('button', 'btn small', '+ Hinzufügen'); add.type = 'button';
+      add.addEventListener('click', () => { if (!slCan()) return slDeny(); const L = slCur(); if (!L) return; L.items.push({ id: slId(), type: 'song', title: s.title, artist: s.artist || '', relType: s.relType || 'album', album: s.album || '', year: s.year || 0, genre: s.genre || '', dur: s.dur || 0, key: s.key || '', bpm: s.bpm || 0, note: s.note || '' }); slSave(L); renderSetlist(); flash('„' + (s.title || 'Song') + '“ hinzugefügt'); });
+      r.append(add);
+    } else {
+      const ed = el('button', 'btn small ghost', '✎ Bearbeiten'); ed.type = 'button'; ed.addEventListener('click', () => songCan() ? slOpenItem(-1, 'song', { id: s.id }) : songDeny());
+      const del = el('button', 'btn small ghost sl-del', '🗑 Löschen'); del.type = 'button'; del.addEventListener('click', () => songDelete(s.id));
+      r.append(ed, del);
+    }
+    return r;
+  }
+  function renderSongs() {
+    const box = $('songList'); if (!box) return; box.innerHTML = '';
+    $('songNew').classList.toggle('pv-locked', !songCan());
+    $('songSortBy').value = songSort.by; $('songSortDir').textContent = songSort.dir > 0 ? '↑ aufsteigend' : '↓ absteigend';
+    const list = songsSorted($('songFilter').value.trim().toLowerCase(), songSort);
+    $('songCount').textContent = slSongs.length === 1 ? '1 Song' : slSongs.length + ' Songs';
+    if (!list.length) box.appendChild(el('div', 'mnote', slSongs.length ? 'Kein Treffer.' : 'Noch keine Songs. Mit „+ Neuer Song“ legst du den ersten an.'));
+    list.forEach(s => box.appendChild(songRow(s, 'manage')));
+  }
+  $('songNew').addEventListener('click', () => songCan() ? slOpenItem(-1, 'song', {}) : songDeny());
+  $('songFilter').addEventListener('input', renderSongs);
+  $('songSortBy').addEventListener('change', () => { songSort.by = $('songSortBy').value; try { ls.set('songSort', JSON.stringify(songSort)); } catch (e) {} renderSongs(); });
+  $('songSortDir').addEventListener('click', () => { songSort.dir = -songSort.dir; try { ls.set('songSort', JSON.stringify(songSort)); } catch (e) {} renderSongs(); });
+  $('songsBack').addEventListener('click', () => { if (navPos > 0) navGo(-1); else showPage('overview'); });
+  // Auswahl „Song hinzufügen oder erstellen“ in der Setlist
   function openSlLib() { $('slLibFilter').value = ''; $('slLibModal').classList.remove('hidden'); renderSlLib(); }
   function renderSlLib() {
-    const box = $('slLibList'); box.innerHTML = ''; const q = $('slLibFilter').value.trim().toLowerCase(), can = slCan(), L = slCur();
-    const list = slSongs.filter(s => !q || ((s.title || '') + ' ' + (s.artist || '')).toLowerCase().includes(q));
-    $('slLibNew').classList.toggle('pv-locked', !can);
-    if (!list.length) box.appendChild(el('div', 'mnote', slSongs.length ? 'Kein Treffer.' : 'Noch keine Songs. Mit „+ Neuer Song“ legst du den ersten an.'));
-    list.forEach(s => {
-      const r = el('div', 'sl-librow'), m = el('div', 'sl-main');
-      m.append(el('div', 'sl-title', s.title || 'Ohne Titel'), el('div', 'sl-sub', [s.artist, s.album, s.year || '', slFmt(s.dur), s.key, s.bpm ? s.bpm + ' BPM' : ''].filter(Boolean).join(' · ')));
-      const add = el('button', 'btn small' + (L ? '' : ' hidden'), '+'); add.type = 'button'; add.title = 'An die Setlist anhängen';
-      add.addEventListener('click', () => { if (!can) return slDeny(); const LL = slCur(); if (!LL) return; LL.items.push({ id: slId(), type: 'song', title: s.title, artist: s.artist || '', album: s.album || '', year: s.year || 0, dur: s.dur || 0, key: s.key || '', bpm: s.bpm || 0, note: s.note || '' }); slSave(LL); renderSetlist(); flash('„' + (s.title || 'Song') + '“ hinzugefügt'); });
-      const ed = el('button', 'btn small ghost', '✎ Bearbeiten'); ed.type = 'button'; ed.title = 'Song bearbeiten';
-      ed.addEventListener('click', () => can ? slOpenItem(-1, 'song', { id: s.id }) : slDeny());
-      const del = el('button', 'btn small ghost sl-del', '🗑'); del.type = 'button'; del.title = 'Song löschen';
-      del.addEventListener('click', async () => {
-        if (!can) return slDeny(); if (!confirm('„' + (s.title || 'Song') + '“ aus der Bibliothek löschen? Setlists behalten ihre Einträge.')) return;
-        slSongs = slSongs.filter(x => x.id !== s.id); renderSlLib();
-        try { await db.collection(`songs/${slBand}/items`).doc(s.id).delete(); } catch (e) { flash('Löschen fehlgeschlagen', true); }
-      });
-      r.append(m, add, ed, del); box.appendChild(r);
-    });
+    const box = $('slLibList'); if (!box) return; box.innerHTML = '';
+    const list = songsSorted($('slLibFilter').value.trim().toLowerCase(), { by: 'title', dir: 1 });
+    if (!list.length) box.appendChild(el('div', 'mnote', slSongs.length ? 'Kein Treffer.' : 'Noch keine Songs vorhanden. Mit „+ Neuer Song“ erstellst du einen.'));
+    list.forEach(s => box.appendChild(songRow(s, 'pick')));
   }
-  $('slLibBtn').addEventListener('click', openSlLib);
+  $('slLibNew').addEventListener('click', () => slCan() ? slOpenItem(-1, 'song', null, { picker: true }) : slDeny());
   $('slLibFilter').addEventListener('input', renderSlLib);
-  $('slLibNew').addEventListener('click', () => slCan() ? slOpenItem(-1, 'song', {}) : slDeny());
   $('slLibClose').addEventListener('click', () => $('slLibModal').classList.add('hidden'));
   $('slLibModal').addEventListener('click', e => { if (e.target === $('slLibModal')) $('slLibModal').classList.add('hidden'); });
   // Export: Text, CSV, JSON
@@ -2596,8 +2666,8 @@
     if (kind === 'json') { txt = JSON.stringify({ name: L.name, gig: gig ? gig.title : '', start: L.start || '', targetMin: L.targetMin || 0, items: L.items }, null, 2); mime = 'application/json'; }
     else if (kind === 'csv') {
       const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-      txt = '﻿' + ['Nr', 'Uhrzeit', 'Art', 'Titel', 'Interpret', 'Album', 'Jahr', 'Länge', 'Tonart', 'BPM', 'Notiz'].map(q).join(';') + '\r\n' +
-        T.rows.map(r => [r.num || '', r.clock, SL_TYPES[r.it.type].label, r.it.title, r.it.artist, r.it.album, r.it.year || '', slFmt(r.it.dur), r.it.key, r.it.bpm || '', r.it.note].map(q).join(';')).join('\r\n'); mime = 'text/csv';
+      txt = '﻿' + ['Nr', 'Uhrzeit', 'Art', 'Titel', 'Interpret', 'Veröffentlichung', 'Name', 'Jahr', 'Genre', 'Länge', 'Tonart', 'BPM', 'Notiz'].map(q).join(';') + '\r\n' +
+        T.rows.map(r => [r.num || '', r.clock, SL_TYPES[r.it.type].label, r.it.title, r.it.artist, r.it.album ? (SL_REL[r.it.relType] || 'Album') : '', r.it.album, r.it.year || '', r.it.genre, slFmt(r.it.dur), r.it.key, r.it.bpm || '', r.it.note].map(q).join(';')).join('\r\n'); mime = 'text/csv';
     } else {
       txt = [L.name || 'Setlist', gig ? `Gig: ${gig.title || ''}${gig.date ? ' (' + fmtDateOv(parseKey(gig.date), ovCfg().date) + ')' : ''}` : '', `Gesamt: ${slFmt(T.total)}`, ''].filter((x, i) => x || i === 3).join('\r\n') + '\r\n' +
         T.rows.map(r => `${r.num ? String(r.num).padStart(2) + '.' : ' · '} ${r.clock ? r.clock + '  ' : ''}${r.it.title || SL_TYPES[r.it.type].label}${r.it.artist ? ' – ' + r.it.artist : ''}  (${slFmt(r.it.dur)})${r.it.key ? '  [' + r.it.key + ']' : ''}${r.it.note ? '  ' + r.it.note : ''}`).join('\r\n'); mime = 'text/plain';
@@ -5853,9 +5923,16 @@
         T('🕰️', 'Vergangene', 'Checklisten vergangener Termine sind ganz unten unter „Vergangene“ aufklappbar.'),
       ],
       page6: [
-        T('🎼', 'Setlists', 'Mehrere Setlists pro Band. Songs, Intro, Outro, Zwischenteil, Pause und Ansage ans Ende setzen, am Griff ⠿ verschieben, aufs Element tippen zum Bearbeiten. Mit Beginn-Uhrzeit siehst du pro Element die Zeit, mit Soll-Länge die Abweichung.'),
-        T('🎵', 'Song-Bibliothek', 'Songs der Band einmal anlegen (Titel, Interpret, Länge, Tonart, BPM) und mit „+“ in jede Setlist übernehmen. Setlists lassen sich einem Gig zuweisen, duplizieren und als Text, CSV oder JSON exportieren.'),
+        T('🎼', 'Setlists', 'Die Seite zeigt alle Setlists der Band als Karten. Ein Klick öffnet die Setlist mit ihren Songs. Oben sortierst du nach Name, Gig-Datum, Dauer, Anzahl Songs oder zuletzt geändert.'),
+        T('➕', 'Elemente', '„Song hinzufügen oder erstellen“, dazu Intro, Outro, Zwischenteil, Pause und Ansage. Am Griff ⠿ verschiebst du, ein Klick auf das Element bearbeitet es. Mit Beginn-Uhrzeit siehst du pro Element die Zeit, mit Soll-Länge die Abweichung.'),
+        T('⚠️', 'Doppelwarnung', 'Kommt ein Titel doppelt vor, wird der Knopf rot. Ein Klick schaltet die Warnung aus („KEINE WARNUNG“); bei einem neuen doppelten Titel erscheint sie wieder. Ausnahmen (Intro, Break …) stellt der Admin in der Verwaltung ein.'),
+        T('📤', 'Export', 'Die gelben Knöpfe unten speichern die Setlist als Text, CSV oder JSON.'),
         T('↩️', 'Zurück', 'Unten rechts „Zurück“ oder oben ‹ führt zur vorherigen Seite.'),
+      ],
+      page7: [
+        T('🎵', 'Songs', 'Alle Songs der Band an einem Ort: Titel, Interpret, Veröffentlichung (Album, EP oder Single mit Name, Pflicht), Jahr, Genre, Länge, Tonart, BPM. Mit „+ Neuer Song“ legst du einen an.'),
+        T('⇅', 'Suchen und sortieren', 'Oben suchst du und sortierst nach Titel, Interpret, Album, Jahr, Genre oder Länge.'),
+        T('➡️', 'In die Setlist', 'Auf der Seite „Setlist“ übernimmst du Songs mit „Song hinzufügen oder erstellen“.'),
       ],
       page5: [
         T('💰', 'Finanzen', 'Hier erfasst ihr Einnahmen und Ausgaben der Band. Oben siehst du Einnahmen, Ausgaben und den Saldo des gewählten Jahres, darunter die Aufteilung nach Kategorie.'),
@@ -5902,7 +5979,7 @@
         T('💾', 'Speichern', 'Änderungen in den Einstellungen gelten erst nach „Speichern“ – wie in der Verwaltung. Solange etwas offen ist, steht oben ein oranger Hinweis mit „Speichern“ und „Verwerfen“, auch wenn du die Seite wechselst.'),
       ],
     };
-    const names = { home: 'Startbildschirm', team: 'Verwaltung', overview: 'Übersicht', page2: 'Kalender', page3: 'Gigs', page4: 'Checkliste', page5: 'Finanzen', page6: 'Setlist', profile: 'Profil & Bands', settings: 'Einstellungen' };
+    const names = { home: 'Startbildschirm', team: 'Verwaltung', overview: 'Übersicht', page2: 'Kalender', page3: 'Gigs', page4: 'Checkliste', page5: 'Finanzen', page6: 'Setlist', page7: 'Songs', profile: 'Profil & Bands', settings: 'Einstellungen' };
     return { name: names[page] || 'diese Seite', list: (t[page] || []).filter(Boolean) };
   }
   function openTips() {
@@ -5926,10 +6003,10 @@
       });
       d.append(sm, inner); body.append(d);
     };
-    const ICONS = { home: '🏠', overview: '🧭', team: '👥', page2: '📅', page3: '🎤', page4: '☑️', page5: '💰', page6: '🎼', profile: '👤', settings: '⚙️' };
+    const ICONS = { home: '🏠', overview: '🧭', team: '👥', page2: '📅', page3: '🎤', page4: '☑️', page5: '💰', page6: '🎼', page7: '🎵', profile: '👤', settings: '⚙️' };
     const cur = tipsFor(currentPage);
     cat('Diese Seite: ' + cur.name, '📍', cur.list.length ? cur.list : [{ icon: 'ℹ️', title: 'Keine Tipps', text: 'Für diese Seite gibt es noch keine Tipps.' }], true);
-    const pages = inHub ? ['home', 'profile', 'settings'] : ['home', 'overview', 'team', 'page2', 'page3', 'page4', 'page5', 'page6', 'profile', 'settings'];
+    const pages = inHub ? ['home', 'profile', 'settings'] : ['home', 'overview', 'team', 'page2', 'page3', 'page4', 'page5', 'page6', 'page7', 'profile', 'settings'];
     pages.filter(p => p !== currentPage).forEach(p => { const t = tipsFor(p); if (t.list.length) cat(t.name, ICONS[p], t.list, false); });
     const general = [
       { icon: '🗂️', title: 'Registerkarten zuklappen', text: 'Über den Registerkarten steht „Registerkarten ▾“ – ein Klick klappt die Liste zu oder auf. Der Zustand bleibt in diesem Browser gespeichert.' },

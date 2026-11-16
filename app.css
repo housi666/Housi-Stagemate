@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.4 · Build 26 · 2026-11-16 */
+/*! Stagemate v0.4.5 · Build 27 · 2026-11-16 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1572,3 +1572,27 @@
   .sl-wx:hover { opacity: 1; }
   #slWords { margin-bottom: 10px; }
   .chip.sl-word::before { content: none; }
+
+  /* v0.4.5: Setlist-Uebersicht, Songs-Seite, Doppelwarnung als Knopf */
+  .sl-sortbar { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+  .sl-sortbar label { font-size: 13px; color: var(--muted); }
+  .sl-sortbar select, .sl-search { padding: 8px 10px; font-size: 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); font-family: inherit; }
+  .sl-search { flex: 1 1 180px; min-width: 0; max-width: 300px; }
+  .sl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+  .sl-card { text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; cursor: pointer; font: inherit; color: var(--text); display: flex; flex-direction: column; gap: 4px; }
+  .sl-card:hover { border-color: var(--accent); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+  .slc-name { font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .slc-gig, .slc-meta { font-size: 13px; color: var(--muted); }
+  .slc-warn { font-size: 12.5px; font-weight: 700; color: #000; background: #ef4444; border-radius: 8px; padding: 2px 8px; align-self: flex-start; margin-top: 4px; }
+  .sl-dupbtn { border: none; border-radius: 12px; padding: 10px 16px; font: inherit; font-weight: 800; letter-spacing: .03em; cursor: default; align-self: stretch; }
+  .sl-dupbtn.off { background: #6b7280; color: #fff; }
+  .sl-dupbtn.on { background: #ef4444; color: #000; cursor: pointer; }
+  .sl-dupbtn.on:hover { background: #dc2626; }
+  .sl-row.sl-dup { border-color: #ef4444; background: rgba(239,68,68,.08); }
+  .sl-rel { display: flex; gap: 8px; } .sl-rel select { flex: none; width: 110px; } .sl-rel input { flex: 1; min-width: 0; }
+  .sl-lib-page { max-height: none; overflow: visible; margin-top: 12px; }
+  .sl-librow { flex-wrap: wrap; }
+  .sl-librow .sl-main { flex: 1 1 200px; }
+  .sl-librow .sl-sub { white-space: normal; }
+  #slAlbumField .field { margin-bottom: 8px; }
+  .sl-sortbar select { width: auto; max-width: 100%; }

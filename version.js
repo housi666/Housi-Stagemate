@@ -1,16 +1,24 @@
-/*! Stagemate v0.4.4 · Build 26 · 2026-11-16 */
+/*! Stagemate v0.4.5 · Build 27 · 2026-11-16 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.4';
-const APP_BUILD = 26;
+const APP_VERSION = 'v0.4.5';
+const APP_BUILD = 27;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.5', date: '2026-11-16', items: [
+    { type: 'neu', text: 'Setlist: Übersicht aller Setlists als Karten, Klick öffnet die Setlist mit ihren Songs' },
+    { type: 'neu', text: 'Setlist: Sortierung nach Name, Gig-Datum, Dauer, Anzahl Songs oder zuletzt geändert' },
+    { type: 'neu', text: 'Neue Registerkarte „Songs“ (statt Fenster): suchen, sortieren, neu, bearbeiten, löschen; Rechte einstellbar' },
+    { type: 'neu', text: 'Songs: Veröffentlichung (Album, EP oder Single) mit Namen als Pflichtfeld, dazu Genre' },
+    { type: 'besser', text: 'Doppelwarnung ist ein Knopf: rot mit schwarzer Schrift bei Warnung, grau „KEINE WARNUNG“ nach dem Ausschalten; löst bei neuem doppelten Titel wieder aus' },
+    { type: 'besser', text: '„+ aus Bibliothek“ heisst jetzt „Song hinzufügen oder erstellen“; Export-Knöpfe sind gelb' },
+  ] },
   { version: 'v0.4.4', date: '2026-11-16', items: [
     { type: 'neu', text: 'Bandverwaltung: Wörter einstellen, die in der Setlist doppelt vorkommen dürfen (hinzufügen, entfernen, Standard wiederherstellen)' },
   ] },
