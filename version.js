@@ -1,16 +1,22 @@
-/*! Stagemate v0.4.1 · Build 23 · 2026-11-16 */
+/*! Stagemate v0.4.2 · Build 24 · 2026-11-16 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.1';
-const APP_BUILD = 23;
+const APP_VERSION = 'v0.4.2';
+const APP_BUILD = 24;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.2', date: '2026-11-16', items: [
+    { type: 'neu', text: 'Setlist: mehrere Setlists pro Band, Songs, Intro, Outro, Zwischenteil, Pause und Ansage, per Griff verschiebbar' },
+    { type: 'neu', text: 'Setlist: Gesamtdauer, Uhrzeit pro Element (ab Beginn), Soll-Länge mit Warnung, Gig zuweisen, duplizieren' },
+    { type: 'neu', text: 'Setlist: Song-Bibliothek der Band und Export als Text, CSV oder JSON' },
+    { type: 'neu', text: 'Startbildschirm: „Setlist erstellen“ funktioniert jetzt' },
+  ] },
   { version: 'v0.4.1', date: '2026-11-16', items: [
     { type: 'neu', text: 'Startbildschirm: Anzeigen in 2 Stufen zuklappbar (halb, eine Zeile); Zustand wird gemerkt' },
     { type: 'besser', text: 'Verschieben: Anzeige schwebt, sobald sie am Griff gepackt wird' },

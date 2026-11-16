@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.1 · Build 23 · 2026-11-16 */
+/*! Stagemate v0.4.2 · Build 24 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -1120,6 +1120,7 @@
     $('page-finance').classList.toggle('hidden', page !== 'page5');
     if (page === 'page5') { openFinance(); $('buildModal').classList.remove('hidden'); }
     $('page-setlist').classList.toggle('hidden', page !== 'page6');
+    if (page === 'page6') openSetlist();
     $('page-calendar').classList.toggle('hidden', page !== 'page2');
     if (page === 'page2') renderCalendar(0);
     if (page === 'profile' && !isProfileDirty()) prepareForm();
@@ -1300,7 +1301,7 @@
   }
 
   // ---- Persönliche Übersicht: Schnell erstellen (Band wählen, dann das passende Fenster öffnen)
-  const QUICK = { gig: { page: 'page3', btn: 'gigAdd', label: 'Gig erstellen' }, event: { page: 'page2', btn: 'calAdd', label: 'Termin erstellen' }, checklist: { page: 'page4', btn: 'clpAdd', label: 'Checkliste erstellen' } };
+  const QUICK = { gig: { page: 'page3', btn: 'gigAdd', label: 'Gig erstellen' }, event: { page: 'page2', btn: 'calAdd', label: 'Termin erstellen' }, checklist: { page: 'page4', btn: 'clpAdd', label: 'Checkliste erstellen' }, setlist: { page: 'page6', btn: 'slNew', label: 'Setlist erstellen' } };
   function quickGo(kind, bandId) {
     const q = QUICK[kind]; $('quickModal').classList.add('hidden');
     currentPage = q.page; enterApp(bandId);
@@ -1308,7 +1309,6 @@
   }
   document.querySelectorAll('[data-quick]').forEach(b => b.addEventListener('click', () => {
     const kind = b.dataset.quick;
-    if (kind === 'setlist') return flash('Die Setlist ist noch im Bau – bald kannst du hier eine Setlist erstellen.', true);
     const ids = bandIdsOf(profile);
     if (!ids.length) return flash('Tritt zuerst einer Band bei oder gründe eine.', true);
     if (ids.length === 1) return quickGo(kind, ids[0]);
@@ -2330,6 +2330,229 @@
       try { ls.set('bandFolded', JSON.stringify(folded)); } catch (e) {}
     }));
   })();
+
+  // ================= Setlist (Seite 6) =================
+  // Setlists: setlists/<Band>/lists/<id> { name, gigId, start, targetMin, items:[{id,type,title,artist,dur,key,bpm,note}] }
+  // Song-Bibliothek: songs/<Band>/items/<id> { title, artist, dur, key, bpm, note }
+  const SL_TYPES = {
+    song: { label: 'Song', icon: '🎵', dur: 240 }, intro: { label: 'Intro', icon: '▶️', dur: 60 }, outro: { label: 'Outro', icon: '⏹️', dur: 60 },
+    zwischen: { label: 'Zwischenteil', icon: '〰️', dur: 60 }, pause: { label: 'Pause', icon: '☕', dur: 900 }, ansage: { label: 'Ansage', icon: '🎤', dur: 30 },
+  };
+  let slPend = null, slLists = [], slSongs = [], slBand = null, slUnsubL = null, slUnsubS = null, slSel = null, slCtx = null, slSaveT = null;
+  const slCan = () => levelFor(currentBand, 'page6') === 'edit' && !viewAs;
+  const slDeny = () => previewBlocked(null, viewAs ? undefined : 'Keine Berechtigung: Du hast für die Setlist nur Leserechte. Bitte den Admin, dir das Recht „Bearbeiten“ zu geben.');
+  const slId = () => 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const slFmt = s => { s = Math.max(0, Math.round(s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + pad2(m) : m) + ':' + pad2(x); };
+  const slParse = t => { t = String(t || '').trim().replace(',', '.'); if (!t) return 0; if (t.includes(':')) { const p = t.split(':').map(Number); return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : (p[0] || 0) * 60 + (p[1] || 0); } return Math.round((parseFloat(t) || 0) * 60); };
+  const slClock = (startMin, sec) => { const t = Math.round(startMin + sec / 60) % 1440; return pad2(Math.floor(t / 60)) + ':' + pad2(t % 60); };
+  const slCur = () => slLists.find(l => l.id === slSel) || null;
+  const slGigs = () => calEvents.filter(e => e.category === 'auftritt' && e.kind !== 'checklist' && e.date).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  function openSetlist() {
+    if (slBand !== currentBand) {
+      slBand = currentBand; slLists = []; slSongs = [];
+      [slUnsubL, slUnsubS].forEach(u => { try { u && u(); } catch (e) {} }); slUnsubL = slUnsubS = null;
+      try { slSel = ls.get('slSel_' + currentBand) || null; } catch (e) { slSel = null; }
+      const cL = db.collection(`setlists/${currentBand}/lists`), cS = db.collection(`songs/${currentBand}/items`);
+      const aL = snap => { const keep = slPend && slLists.find(x => x.id === slPend); slLists = snap.docs.map(d => (keep && d.id === slPend ? keep : { id: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de')); if (currentPage === 'page6' && !slBusy()) renderSetlist(); };
+      const aS = snap => { slSongs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.title || '').localeCompare(b.title || '', 'de')); if (!$('slLibModal').classList.contains('hidden')) renderSlLib(); };
+      try { slUnsubL = cL.onSnapshot ? cL.onSnapshot(aL) : null; } catch (e) { slUnsubL = null; }
+      if (!slUnsubL) cL.get().then(aL).catch(() => {});
+      try { slUnsubS = cS.onSnapshot ? cS.onSnapshot(aS) : null; } catch (e) { slUnsubS = null; }
+      if (!slUnsubS) cS.get().then(aS).catch(() => {});
+    }
+    renderSetlist();
+  }
+  const slBusy = () => { const a = document.activeElement; return !!(a && a.closest && a.closest('#slEditor') && /INPUT|TEXTAREA|SELECT/.test(a.tagName)); };
+  function slSave(L) {
+    clearTimeout(slSaveT); slPend = L.id;
+    slSaveT = setTimeout(() => {
+      const d = clone(L); delete d.id; d.updatedAt = new Date().toISOString();
+      db.collection(`setlists/${slBand}/lists`).doc(L.id).set(d).catch(() => flash('Setlist konnte nicht gespeichert werden', true));
+      setTimeout(() => { if (slPend === L.id) slPend = null; }, 1500);
+    }, 400);
+  }
+  function slTimes(L) {
+    const [h, m] = String(L.start || '').split(':').map(Number); const hasStart = L.start && !isNaN(h);
+    const base = hasStart ? h * 60 + (m || 0) : 0; let t = 0, n = 0;
+    return { hasStart, rows: (L.items || []).map(it => { const r = { it, at: t, num: it.type === 'song' ? ++n : 0, clock: hasStart ? slClock(base, t) : '' }; t += it.dur || 0; return r; }), total: t, base };
+  }
+  function renderSetlist() {
+    const can = slCan();
+    const sel = $('slSelect'); sel.innerHTML = '';
+    slLists.forEach(l => sel.appendChild(new Option(l.name || 'Ohne Namen', l.id)));
+    if (!slLists.some(l => l.id === slSel)) slSel = slLists[0] ? slLists[0].id : null;
+    sel.value = slSel || ''; sel.classList.toggle('hidden', !slLists.length);
+    ['slNew', 'slDup', 'slDel'].forEach(id => $(id).classList.toggle('pv-locked', !can));
+    $('slDup').classList.toggle('hidden', !slLists.length); $('slDel').classList.toggle('hidden', !slLists.length);
+    const L = slCur();
+    $('slEmpty').classList.toggle('hidden', !!L); $('slEditor').classList.toggle('hidden', !L);
+    if (!L) return;
+    $('slName').value = L.name || ''; $('slStart').value = L.start || ''; $('slTarget').value = L.targetMin || '';
+    ['slName', 'slStart', 'slTarget', 'slGig'].forEach(id => { $(id).disabled = !can; });
+    const g = $('slGig'); g.innerHTML = ''; g.appendChild(new Option('– kein Gig –', ''));
+    slGigs().forEach(e => g.appendChild(new Option(`${fmtDateOv(parseKey(e.date), ovCfg().date)} · ${e.title || 'Gig'}`, e.id)));
+    if (L.gigId && !slGigs().some(e => e.id === L.gigId)) g.appendChild(new Option('(Gig nicht mehr vorhanden)', L.gigId));
+    g.value = L.gigId || '';
+    const T = slTimes(L);
+    const sum = $('slSum'); sum.innerHTML = '';
+    const nSongs = T.rows.filter(r => r.num).length;
+    sum.append(el('span', null, `${nSongs} ${nSongs === 1 ? 'Song' : 'Songs'} · ${L.items.length} Elemente · Gesamt ${slFmt(T.total)}`));
+    if (T.hasStart && L.items.length) sum.append(el('span', null, `Ende ${slClock(T.base, T.total)}`));
+    if (L.targetMin) {
+      const diff = T.total - L.targetMin * 60, ok = Math.abs(diff) <= 30;
+      const w = el('span', 'sl-tag ' + (ok ? 'ok' : diff > 0 ? 'over' : 'under'), ok ? 'Passt zur Soll-Länge' : diff > 0 ? `${slFmt(diff)} zu lang` : `${slFmt(-diff)} zu kurz`);
+      sum.append(w);
+    }
+    const bar = $('slAddBar'); bar.innerHTML = '';
+    Object.entries(SL_TYPES).forEach(([k, v]) => { const b = el('button', 'btn small ghost' + (can ? '' : ' pv-locked'), `${v.icon} ${v.label}`); b.type = 'button'; b.addEventListener('click', () => can ? slOpenItem(-1, k) : slDeny()); bar.appendChild(b); });
+    const lb = el('button', 'btn small' + (can ? '' : ' pv-locked'), '+ aus Bibliothek'); lb.type = 'button'; lb.addEventListener('click', () => can ? openSlLib() : slDeny()); bar.appendChild(lb);
+    const box = $('slItems'); box.innerHTML = '';
+    if (!L.items.length) box.appendChild(el('div', 'mnote', 'Noch leer. Füge oben Songs, Intro, Pausen oder Ansagen hinzu.'));
+    T.rows.forEach((r, i) => {
+      const it = r.it, ty = SL_TYPES[it.type] || SL_TYPES.song;
+      const row = el('div', 'sl-row sl-t-' + it.type); row.dataset.cid = it.id;
+      const grip = el('span', 'sl-grip', '⠿'); grip.title = 'Ziehen zum Verschieben';
+      const main = el('div', 'sl-main'); main.append(el('div', 'sl-title', (it.title || ty.label)));
+      const sub = [it.artist, it.key, it.bpm ? it.bpm + ' BPM' : '', it.note].filter(Boolean).join(' · '); if (sub) main.append(el('div', 'sl-sub', sub));
+      row.append(grip, el('span', 'sl-num', r.num ? String(r.num) : ty.icon), el('span', 'sl-clock', r.clock || slFmt(r.at)), main, el('span', 'sl-dur', slFmt(it.dur)));
+      row.addEventListener('click', e => { if (e.target.closest('.sl-grip')) return; can ? slOpenItem(i) : slDeny(); });
+      if (can) slDrag(row, grip, box);
+      box.appendChild(row);
+    });
+  }
+  function slDrag(row, grip, box) {
+    grip.addEventListener('pointerdown', e => {
+      if (e.button > 0) return; e.preventDefault();
+      row.classList.add('sl-lifted'); document.body.classList.add('cl-grabbing');
+      const move = ev => {
+        ev.preventDefault();
+        const under = document.elementFromPoint(ev.clientX, ev.clientY), tgt = under && under.closest('.sl-row');
+        if (!tgt || tgt === row || tgt.parentElement !== box) return;
+        const r = tgt.getBoundingClientRect(); box.insertBefore(row, ev.clientY < r.top + r.height / 2 ? tgt : tgt.nextSibling);
+      };
+      const up = () => {
+        document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up);
+        row.classList.remove('sl-lifted'); document.body.classList.remove('cl-grabbing');
+        const L = slCur(); if (!L) return;
+        const ids = [...box.querySelectorAll('.sl-row')].map(x => x.dataset.cid);
+        if (ids.join() !== L.items.map(x => x.id).join()) { L.items = ids.map(id => L.items.find(x => x.id === id)); slSave(L); }
+        renderSetlist();
+      };
+      document.addEventListener('pointermove', move, { passive: false }); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
+    });
+  }
+  async function slNewList(copyFrom) {
+    if (!slCan()) return slDeny();
+    const ref = db.collection(`setlists/${currentBand}/lists`).doc();
+    const base = copyFrom ? clone(copyFrom) : { name: 'Neue Setlist', gigId: '', start: '', targetMin: 0, items: [] };
+    delete base.id; if (copyFrom) { base.name = (copyFrom.name || 'Setlist') + ' (Kopie)'; base.gigId = ''; base.items = base.items.map(x => ({ ...x, id: slId() })); }
+    base.createdBy = uid; base.updatedAt = new Date().toISOString();
+    slLists.push({ id: ref.id, ...base }); slSel = ref.id; try { ls.set('slSel_' + currentBand, slSel); } catch (e) {}
+    renderSetlist(); if (!copyFrom) { $('slName').focus(); $('slName').select(); }
+    try { await ref.set(base); } catch (e) { flash('Setlist konnte nicht gespeichert werden', true); }
+  }
+  $('slNew').addEventListener('click', () => slNewList());
+  $('slDup').addEventListener('click', () => { const L = slCur(); if (L) slNewList(L); });
+  $('slDel').addEventListener('click', async () => {
+    const L = slCur(); if (!L) return; if (!slCan()) return slDeny();
+    if (!confirm(`Setlist „${L.name || 'Ohne Namen'}“ wirklich löschen?`)) return;
+    slLists = slLists.filter(x => x.id !== L.id); slSel = null; renderSetlist();
+    try { await db.collection(`setlists/${currentBand}/lists`).doc(L.id).delete(); flash('Setlist gelöscht'); } catch (e) { flash('Löschen fehlgeschlagen', true); }
+  });
+  $('slSelect').addEventListener('change', () => { slSel = $('slSelect').value; try { ls.set('slSel_' + currentBand, slSel); } catch (e) {} renderSetlist(); });
+  const slField = (id, fn) => $(id).addEventListener('input', () => { const L = slCur(); if (!L || !slCan()) return; fn(L, $(id).value); slSave(L); if (id !== 'slName') renderSetlistKeep(); else { const o = [...$('slSelect').options].find(x => x.value === L.id); if (o) o.textContent = L.name || 'Ohne Namen'; } });
+  const renderSetlistKeep = () => { const a = document.activeElement, id = a && a.id, v = a && a.value; renderSetlist(); if (id && $(id)) { $(id).focus(); } };
+  slField('slName', (L, v) => { L.name = v; });
+  slField('slStart', (L, v) => { L.start = v; });
+  slField('slTarget', (L, v) => { L.targetMin = Math.max(0, parseInt(v, 10) || 0); });
+  $('slGig').addEventListener('change', () => { const L = slCur(); if (!L || !slCan()) return; L.gigId = $('slGig').value; const e = calEvents.find(x => x.id === L.gigId); if (e && !L.start && e.start) L.start = e.start; slSave(L); renderSetlist(); });
+  // Element bearbeiten / hinzufügen
+  function slOpenItem(idx, type, lib) {
+    const L = slCur(); const isLib = !!lib;
+    const it = isLib ? (lib.id ? slSongs.find(s => s.id === lib.id) : null) : (idx >= 0 ? L.items[idx] : null);
+    const ty = it ? (it.type || 'song') : (type || 'song');
+    slCtx = { idx, lib: isLib ? (lib.id || '') : null, isNew: !it };
+    const sel = $('slType'); sel.innerHTML = ''; Object.entries(SL_TYPES).forEach(([k, v]) => sel.appendChild(new Option(v.label, k))); sel.value = ty;
+    $('slTypeField').classList.toggle('hidden', isLib);
+    $('slItemH').textContent = isLib ? (it ? 'Song bearbeiten' : 'Neuer Song') : (it ? 'Element bearbeiten' : SL_TYPES[ty].label + ' hinzufügen');
+    $('slTitle').value = it ? (it.title || '') : (ty === 'song' ? '' : SL_TYPES[ty].label);
+    $('slArtist').value = it ? (it.artist || '') : ''; $('slDur').value = slFmt(it ? it.dur : SL_TYPES[ty].dur);
+    $('slKey').value = it ? (it.key || '') : ''; $('slBpm').value = it && it.bpm ? it.bpm : ''; $('slNote').value = it ? (it.note || '') : '';
+    $('slToLib').checked = false; $('slToLibWrap').classList.toggle('hidden', isLib || ty !== 'song' || !!it);
+    $('slItemDel').classList.toggle('hidden', !it); $('slItemMsg').textContent = '';
+    $('slArtistField').classList.toggle('hidden', !isLib && ty !== 'song');
+    $('slItemModal').classList.remove('hidden'); setTimeout(() => $('slTitle').focus(), 30);
+  }
+  $('slType').addEventListener('change', () => {
+    const t = $('slType').value; $('slArtistField').classList.toggle('hidden', t !== 'song');
+    if (slCtx && slCtx.isNew) { const olds = Object.values(SL_TYPES).map(x => x.label); if (!$('slTitle').value || olds.includes($('slTitle').value)) $('slTitle').value = t === 'song' ? '' : SL_TYPES[t].label; $('slDur').value = slFmt(SL_TYPES[t].dur); $('slToLibWrap').classList.toggle('hidden', t !== 'song'); }
+  });
+  const closeSlItem = () => { $('slItemModal').classList.add('hidden'); slCtx = null; };
+  ['slItemClose', 'slItemCancel'].forEach(id => $(id).addEventListener('click', closeSlItem));
+  $('slItemModal').addEventListener('click', e => { if (e.target === $('slItemModal')) closeSlItem(); });
+  $('slItemSave').addEventListener('click', async () => {
+    if (!slCtx) return;
+    const type = slCtx.lib !== null ? 'song' : $('slType').value;
+    const data = { title: $('slTitle').value.trim(), artist: type === 'song' ? $('slArtist').value.trim() : '', dur: slParse($('slDur').value), key: $('slKey').value.trim(), bpm: Math.max(0, parseInt($('slBpm').value, 10) || 0), note: $('slNote').value.trim() };
+    if (!data.title && type === 'song') { $('slItemMsg').textContent = 'Bitte einen Titel eingeben.'; return; }
+    if (!data.title) data.title = SL_TYPES[type].label;
+    if (slCtx.lib !== null) {
+      const col = db.collection(`songs/${slBand}/items`), ref = slCtx.lib ? col.doc(slCtx.lib) : col.doc();
+      try { await ref.set({ ...data, updatedAt: new Date().toISOString() }); } catch (e) { $('slItemMsg').textContent = 'Speichern fehlgeschlagen.'; return; }
+      if (slCtx.lib) { const s = slSongs.find(x => x.id === slCtx.lib); if (s) Object.assign(s, data); } else slSongs.push({ id: ref.id, ...data });
+      slSongs.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'de')); closeSlItem(); renderSlLib(); return;
+    }
+    const L = slCur(); if (!L) return;
+    if (slCtx.idx >= 0) L.items[slCtx.idx] = { ...L.items[slCtx.idx], type, ...data }; else L.items.push({ id: slId(), type, ...data });
+    if (type === 'song' && $('slToLib').checked && !slSongs.some(s => (s.title || '').toLowerCase() === data.title.toLowerCase() && (s.artist || '') === data.artist)) {
+      const ref = db.collection(`songs/${slBand}/items`).doc(); slSongs.push({ id: ref.id, ...data }); ref.set({ ...data, updatedAt: new Date().toISOString() }).catch(() => {});
+    }
+    slSave(L); closeSlItem(); renderSetlist();
+  });
+  $('slItemDel').addEventListener('click', async () => {
+    if (!slCtx) return;
+    if (slCtx.lib) { if (!confirm('Song aus der Bibliothek löschen? Setlists behalten ihre Einträge.')) return; slSongs = slSongs.filter(s => s.id !== slCtx.lib); try { await db.collection(`songs/${slBand}/items`).doc(slCtx.lib).delete(); } catch (e) {} closeSlItem(); renderSlLib(); return; }
+    const L = slCur(); if (!L || slCtx.idx < 0) return; L.items.splice(slCtx.idx, 1); slSave(L); closeSlItem(); renderSetlist();
+  });
+  // Song-Bibliothek
+  function openSlLib() { $('slLibFilter').value = ''; $('slLibModal').classList.remove('hidden'); renderSlLib(); }
+  function renderSlLib() {
+    const box = $('slLibList'); box.innerHTML = ''; const q = $('slLibFilter').value.trim().toLowerCase(), can = slCan(), L = slCur();
+    const list = slSongs.filter(s => !q || ((s.title || '') + ' ' + (s.artist || '')).toLowerCase().includes(q));
+    $('slLibNew').classList.toggle('pv-locked', !can);
+    if (!list.length) box.appendChild(el('div', 'mnote', slSongs.length ? 'Kein Treffer.' : 'Noch keine Songs. Mit „+ Neuer Song“ legst du den ersten an.'));
+    list.forEach(s => {
+      const r = el('div', 'sl-librow'), m = el('div', 'sl-main');
+      m.append(el('div', 'sl-title', s.title || 'Ohne Titel'), el('div', 'sl-sub', [s.artist, slFmt(s.dur), s.key, s.bpm ? s.bpm + ' BPM' : ''].filter(Boolean).join(' · ')));
+      const add = el('button', 'btn small' + (L ? '' : ' hidden'), '+'); add.type = 'button'; add.title = 'An die Setlist anhängen';
+      add.addEventListener('click', () => { if (!can) return slDeny(); const LL = slCur(); if (!LL) return; LL.items.push({ id: slId(), type: 'song', title: s.title, artist: s.artist || '', dur: s.dur || 0, key: s.key || '', bpm: s.bpm || 0, note: s.note || '' }); slSave(LL); renderSetlist(); flash('„' + (s.title || 'Song') + '“ hinzugefügt'); });
+      const ed = el('button', 'btn small ghost', '✎'); ed.type = 'button'; ed.title = 'Song bearbeiten';
+      ed.addEventListener('click', () => can ? slOpenItem(-1, 'song', { id: s.id }) : slDeny());
+      r.append(m, add, ed); box.appendChild(r);
+    });
+  }
+  $('slLibBtn').addEventListener('click', openSlLib);
+  $('slLibFilter').addEventListener('input', renderSlLib);
+  $('slLibNew').addEventListener('click', () => slCan() ? slOpenItem(-1, 'song', {}) : slDeny());
+  $('slLibClose').addEventListener('click', () => $('slLibModal').classList.add('hidden'));
+  $('slLibModal').addEventListener('click', e => { if (e.target === $('slLibModal')) $('slLibModal').classList.add('hidden'); });
+  // Export: Text, CSV, JSON
+  document.querySelectorAll('[data-slx]').forEach(b => b.addEventListener('click', () => {
+    const L = slCur(); if (!L) return; const T = slTimes(L), kind = b.dataset.slx;
+    const gig = calEvents.find(e => e.id === L.gigId), safe = (L.name || 'Setlist').replace(/[^\wäöüÄÖÜ -]+/g, '').trim() || 'Setlist';
+    let txt, mime;
+    if (kind === 'json') { txt = JSON.stringify({ name: L.name, gig: gig ? gig.title : '', start: L.start || '', targetMin: L.targetMin || 0, items: L.items }, null, 2); mime = 'application/json'; }
+    else if (kind === 'csv') {
+      const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+      txt = '﻿' + ['Nr', 'Uhrzeit', 'Art', 'Titel', 'Interpret', 'Länge', 'Tonart', 'BPM', 'Notiz'].map(q).join(';') + '\r\n' +
+        T.rows.map(r => [r.num || '', r.clock, SL_TYPES[r.it.type].label, r.it.title, r.it.artist, slFmt(r.it.dur), r.it.key, r.it.bpm || '', r.it.note].map(q).join(';')).join('\r\n'); mime = 'text/csv';
+    } else {
+      txt = [L.name || 'Setlist', gig ? `Gig: ${gig.title || ''}${gig.date ? ' (' + fmtDateOv(parseKey(gig.date), ovCfg().date) + ')' : ''}` : '', `Gesamt: ${slFmt(T.total)}`, ''].filter((x, i) => x || i === 3).join('\r\n') + '\r\n' +
+        T.rows.map(r => `${r.num ? String(r.num).padStart(2) + '.' : ' · '} ${r.clock ? r.clock + '  ' : ''}${r.it.title || SL_TYPES[r.it.type].label}${r.it.artist ? ' – ' + r.it.artist : ''}  (${slFmt(r.it.dur)})${r.it.key ? '  [' + r.it.key + ']' : ''}${r.it.note ? '  ' + r.it.note : ''}`).join('\r\n'); mime = 'text/plain';
+    }
+    const url = URL.createObjectURL(new Blob([txt], { type: mime + ';charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url; a.download = safe + '.' + kind; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }));
 
   // ================= Finanzen: befindet sich im Bau =================
   const FIN_LOCKED = true;   // Finanzen im Bau: für alle Benutzer gesperrt
@@ -5578,7 +5801,8 @@
         T('🕰️', 'Vergangene', 'Checklisten vergangener Termine sind ganz unten unter „Vergangene“ aufklappbar.'),
       ],
       page6: [
-        T('🚧', 'Im Bau', 'Die Setlist entsteht gerade: Songs, Reihenfolge per Drag & Drop, Längen und Gesamtdauer, Intro/Outro, Vorlagen und Export.'),
+        T('🎼', 'Setlists', 'Mehrere Setlists pro Band. Songs, Intro, Outro, Zwischenteil, Pause und Ansage ans Ende setzen, am Griff ⠿ verschieben, aufs Element tippen zum Bearbeiten. Mit Beginn-Uhrzeit siehst du pro Element die Zeit, mit Soll-Länge die Abweichung.'),
+        T('🎵', 'Song-Bibliothek', 'Songs der Band einmal anlegen (Titel, Interpret, Länge, Tonart, BPM) und mit „+“ in jede Setlist übernehmen. Setlists lassen sich einem Gig zuweisen, duplizieren und als Text, CSV oder JSON exportieren.'),
         T('↩️', 'Zurück', 'Unten rechts „Zurück“ oder oben ‹ führt zur vorherigen Seite.'),
       ],
       page5: [
@@ -5606,7 +5830,7 @@
         T('🏠', 'Persönliche Übersicht', 'Hier landest du nach dem Anmelden. Sie gehört nur dir: keine Seitenleiste, keine Band. Oben die Kopfzeile mit Uhr, Tipps, Support und Abmelden.'),
         T('🎸', 'Band öffnen', 'Die Bandseite öffnest du nur hier: Klick auf eine Band unter „Deine Bands“. Die zuletzt geöffnete steht zuoberst.'),
         T('🧩', 'Anzeigen verschieben', 'Jede Anzeige (Bands, nächster Gig, Termine, Checklisten-Punkte, Profil, Einstellungen) hat links oben einen Griff ⠿. Packen und an einen anderen Platz ziehen – die anderen rücken sanft nach, Lücken werden automatisch nach oben geschlossen. Die Anordnung bleibt in diesem Browser gespeichert; „Anordnung zurücksetzen“ stellt die Grundaufteilung wieder her.'),
-        T('⚡', 'Schnell erstellen', 'Gig, Termin oder Checkliste direkt von hier erstellen: Band wählen (bei mehreren Bands), dann öffnet sich das passende Fenster in der Band. Die Setlist folgt.'),
+        T('⚡', 'Schnell erstellen', 'Gig, Termin oder Checkliste direkt von hier erstellen: Band wählen (bei mehreren Bands), dann öffnet sich das passende Fenster in der Band. Auch die Setlist.'),
         T('🎤', 'Dein nächster Gig', 'Zeigt den nächsten Gig aus allen deinen Bands (bis ein Jahr voraus) mit Countdown, Ort und Zeitplan. „Gig öffnen“ springt direkt zum Gig in der Band.'),
         T('📅', 'Deine Termine', '„Deine nächsten Termine“ zeigt Gigs und Termine aller deiner Bands der nächsten 60 Tage. Ein Klick öffnet den Termin in der Band.'),
         T('☑️', 'Deine Checklisten-Punkte', 'Alle offenen Punkte, die du in irgendeiner Band übernommen hast – mit Band, was und wann.'),
