@@ -253,8 +253,12 @@
     return 'PUID-' + Date.now().toString().slice(-8);
   }
   async function ensurePuid() {
-    if (!profile || profile.puid || readOnly) return;
-    try { const p = clone(profile); p.puid = await newPuid(); await db.doc('members/' + uid).set(p); profile = p; } catch (e) {}
+    if (!profile || readOnly || (profile.puid && !profile._migrateContact)) return;
+    try {
+      const p = clone(profile); delete p._migrateContact;
+      if (!p.puid) p.puid = await newPuid();
+      await db.doc('members/' + uid).set(p); profile = p;
+    } catch (e) {}
   }
 
   async function createBand(name, tag) {
@@ -266,7 +270,7 @@
     }
     const ref = db.collection('bands').doc();
     const now = new Date().toISOString();
-    const band = { name, code, tag: tag || '', tagAt: now, show: { ...SHOW_DEFAULT }, createdBy: uid, createdAt: now };
+    const band = { name, code, tag: tag || '', tagAt: now, tagAtMs: Date.now(), show: { ...SHOW_DEFAULT }, createdBy: uid, createdAt: now };
     const cfg = normCfg(null);
     await db.doc(cfgPath(uid, ref.id)).set(cfg);
     await ref.set(band);
@@ -274,7 +278,50 @@
   }
   async function loadMembers(bandId) {
     const q = await db.collection('members').where('bandIds', 'array-contains', bandId).get();
-    return q.docs.map(d => ({ uid: d.id, ...d.data() }));
+    const list = q.docs.map(d => ({ uid: d.id, ...d.data() }));
+    // Kontaktangaben liegen getrennt und sind nur für Mitglieder gemeinsamer Bands lesbar
+    await Promise.all(list.map(async m => {
+      try { const c = await db.doc('contacts/' + m.uid).get(); if (c.exists) { const d = c.data(); m.email = d.email || ''; m.phone = d.phone || ''; } } catch (e) {}
+    }));
+    return list;
+  }
+
+  // ================= Kontaktangaben (E-Mail, Telefon) =================
+  // members/<uid>   öffentlich für angemeldete Benutzer (Nickname, Name, Bands …)
+  // contacts/<uid>  E-Mail und Telefon – nur die Person selbst und Mitglieder gemeinsamer Bands
+  let lastContact = null;
+  function withContacts(base) {
+    return {
+      collection: p => base.collection(p),
+      doc(path) {
+        const ref = base.doc(path);
+        const m = /^members\/([^/]+)$/.exec(path);
+        if (!m) return ref;
+        return {
+          id: ref.id, path: ref.path,
+          get: () => ref.get(),
+          async set(d) {
+            const rest = { ...d }; delete rest.email; delete rest.phone; delete rest._migrateContact;
+            await ref.set(rest);
+            if (m[1] === uid && ('email' in d || 'phone' in d)) {
+              const c = { email: d.email || '', phone: d.phone || '' };
+              const key = JSON.stringify(c);
+              if (key !== lastContact) { await base.doc('contacts/' + m[1]).set({ ...c, updatedAt: new Date().toISOString() }); lastContact = key; }
+            }
+          },
+          async delete() { await ref.delete(); if (m[1] === uid) { try { await base.doc('contacts/' + m[1]).delete(); } catch (e) {} lastContact = null; } },
+        };
+      },
+    };
+  }
+  async function loadOwnContact(p) {
+    if (!p) return p;
+    try {
+      const c = await db.doc('contacts/' + uid).get();
+      if (c.exists) { const d = c.data(); p.email = d.email || ''; p.phone = d.phone || ''; lastContact = JSON.stringify({ email: p.email, phone: p.phone }); }
+      else if (p.email || p.phone) p._migrateContact = true;   // ältere Profile: Kontakt noch im öffentlichen Dokument
+    } catch (e) {}
+    return p;
   }
   function genCode() {
     const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -2310,7 +2357,7 @@
       await db.doc(cfgPath(uid, band.id)).set(clone(cfg));
       if (newName !== band.name || tagChanged || showChanged) {
         const { id, cfg: _c, ...rest } = band;
-        await db.doc('bands/' + band.id).set({ ...rest, name: newName, tag: draftTag, tagAt: tagChanged ? now : (band.tagAt || null), show: { ...draftShow } });
+        await db.doc('bands/' + band.id).set({ ...rest, name: newName, tag: draftTag, tagAt: tagChanged ? now : (band.tagAt || null), tagAtMs: tagChanged ? Date.now() : (band.tagAtMs || 0), show: { ...draftShow } });
         const opt = [...$('bandSwitch').options].find(o => o.value === band.id);
         if (opt) opt.textContent = newName + ' (Admin)';
       }
@@ -4924,14 +4971,14 @@
     renderAuth();
     const s0 = await Data.connect({ timeoutMs: 10000, onNeedLogin: () => showFbLogin(), onOffline: () => showFbLogin(true) });
     hideFbLogin();
-    db = s0.db; uid = s0.uid; suggestedName = s0.name || ''; suggestedEmail = s0.email || ''; if (s0.readOnly) readOnly = true;
+    db = withContacts(s0.db); uid = s0.uid; suggestedName = s0.name || ''; suggestedEmail = s0.email || ''; if (s0.readOnly) readOnly = true;
     try {
       const s = await db.doc('members/' + uid).get();
       // Kopie: Objekte aus der Datenbank können schreibgeschützt sein
-      profile = s.exists ? clone(s.data()) : null;
+      profile = s.exists ? await loadOwnContact(clone(s.data())) : null;
       bands = profile && Array.isArray(profile.bandIds) ? await loadBands(profile.bandIds) : {};
     } catch (e) {
-      if (s0.mode !== 'local') { const s1 = Data.useLocal(); db = s1.db; uid = s1.uid; }
+      if (s0.mode !== 'local') { const s1 = Data.useLocal(); db = withContacts(s1.db); uid = s1.uid; }
       profile = null; bands = {};
     }
     mode = Data.mode;

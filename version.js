@@ -3,13 +3,18 @@
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.1.8';
-const APP_BUILD = 9;
+const APP_VERSION = 'v0.1.9';
+const APP_BUILD = 10;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Pre-Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.1.9', date: '2026-11-16', items: [
+    { type: 'besser', text: 'Datenschutz: E-Mail und Telefon getrennt gespeichert, nur für dich und Mitglieder gemeinsamer Bands lesbar' },
+    { type: 'besser', text: 'Bestehende Profile werden beim Anmelden automatisch umgestellt' },
+    { type: 'besser', text: 'Firestore-Regeln prüfen Format und 5-Minuten-Sperre des Band-Tags' },
+  ] },
   { version: 'v0.1.8', date: '2026-11-16', items: [
     { type: 'neu', text: 'Nach dem Anmelden: Übersicht «Deine Bands» mit Logo, Tag und Rollen; ein Klick öffnet die Band' },
     { type: 'besser', text: 'Sichtbarkeitseinstellungen der Band gelten auch in der Übersicht' },
