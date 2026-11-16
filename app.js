@@ -1,4 +1,4 @@
-/*! Stagemate v0.2.0 · Build 13 · 2026-11-16 */
+/*! Stagemate v0.2.1 · Build 14 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -1120,11 +1120,101 @@
     if (!ids.length) list.append(el('div', 'mnote', 'Du bist noch in keiner Band. Tritt einer Band bei oder gründe eine.'));
     const sorted = [...ids].sort((a, c) => (a === profile.lastBand ? -1 : c === profile.lastBand ? 1 : (bands[a].name || '').localeCompare(bands[c].name || '', 'de')));
     sorted.forEach(id => list.append(bandCard(id)));
+    loadHubAgenda();
   }
-  $('hubAddBand').addEventListener('click', () => {
+  function hubAddBandMode(m) {
     const blk = $('addBandBlock'); blk.classList.remove('folded');
+    if (!isProfileDirty()) prepareForm();
+    setBandMode(m);
     openHubSection('profile', blk);
+    setTimeout(() => { const f = m === 'create' ? $('fBandName') : $('fCode'); if (f) f.focus(); }, 300);
+  }
+  $('hubAddBand').addEventListener('click', () => hubAddBandMode('create'));
+  $('hubJoinBand').addEventListener('click', () => hubAddBandMode('join'));
+  // Band suchen (Name oder Tag) – Sichtbarkeit der Band gilt auch hier
+  let allBandsCache = null, searchT = null;
+  $('hubSearchBtn').addEventListener('click', () => {
+    const box = $('hubSearch'), open = box.classList.toggle('hidden') === false;
+    if (open) { $('hubSearchInput').focus(); runBandSearch(); }
   });
+  $('hubSearchInput').addEventListener('input', () => { clearTimeout(searchT); searchT = setTimeout(runBandSearch, 200); });
+  async function runBandSearch() {
+    const res = $('hubSearchRes'), q = $('hubSearchInput').value.trim().toLowerCase();
+    if (!allBandsCache) {
+      res.innerHTML = ''; res.append(el('div', 'mnote', 'Bands werden geladen …'));
+      try { const s = await db.collection('bands').get(); allBandsCache = s.docs.map(d => ({ id: d.id, ...d.data() })); }
+      catch (e) { res.innerHTML = ''; res.append(el('div', 'mnote', 'Die Bandliste konnte nicht geladen werden.')); return; }
+    }
+    res.innerHTML = '';
+    const mine = new Set(bandIdsOf(profile));
+    const list = allBandsCache.filter(b => {
+      const sh = showOf(b);
+      const hay = [(sh.name ? b.name : ''), (sh.tag ? b.tag : '')].join(' ').toLowerCase();
+      return hay.trim() && (!q || hay.includes(q));
+    }).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de')).slice(0, 30);
+    if (!list.length) { res.append(el('div', 'mnote', q ? 'Keine Band gefunden.' : 'Noch keine sichtbaren Bands.')); return; }
+    list.forEach(b => {
+      const sh = showOf(b), row = el('div', 'hs-row');
+      const nm = el('span', 'hs-name'); if (sh.name) nm.append(b.name); else nm.append('Band'); if (sh.tag && b.tag) nm.append(tagChip(b.tag));
+      row.append(nm, el('span', 'hs-state', mine.has(b.id) ? '✓ deine Band' : 'Code beim Admin anfragen'));
+      if (mine.has(b.id)) { row.classList.add('mine'); row.addEventListener('click', () => enterApp(b.id)); }
+      res.append(row);
+    });
+  }
+
+  // ---- Persönliche Übersicht: Termine und Checklisten-Punkte aus allen Bands
+  async function loadHubAgenda() {
+    const ids = bandIdsOf(profile), today = dOnly(new Date()), until = addDays(today, 60);
+    const ag = $('hubAgendaList'), tk = $('hubTaskList');
+    ag.innerHTML = ''; tk.innerHTML = ''; ag.append(el('div', 'mnote', 'Wird geladen …'));
+    const events = [], tasks = [];
+    await Promise.all(ids.map(async id => {
+      try {
+        const snap = await db.collection(`calendar/${id}/events`).get();
+        snap.docs.forEach(d => {
+          const ev = { id: d.id, ...d.data() };
+          if (ev.date && ev.kind !== 'checklist') occurrences(ev, today, until).forEach(dt => events.push({ band: id, ev, date: dt }));
+          // eigene, offene Checklisten-Punkte
+          Object.entries(ev.checklists || {}).forEach(([dk, list]) => {
+            const when = dk === '_' ? (ev.kind === 'checklist' && ev.date ? parseKey(ev.date) : null) : parseKey(dk);
+            if (when && when < today) return;
+            (list || []).forEach(r => {
+              const items = r.items || [];
+              items.forEach(i => { if (!i.done && (i.members || []).includes(uid)) tasks.push({ band: id, ev, when, title: i.title, reiter: r.title }); });
+              const rDone = items.length ? items.every(i => i.done) : !!r.done;
+              if (!rDone && (r.members || []).includes(uid) && !items.some(i => (i.members || []).includes(uid) && !i.done)) tasks.push({ band: id, ev, when, title: r.title, reiter: '' });
+            });
+          });
+        });
+      } catch (e) {}
+    }));
+    const c = ovCfg();
+    const bandLabel = id => { const b = bands[id], wrap = el('span', 'ag-band'); wrap.append(b ? b.name : 'Band'); if (b && b.tag && showOf(b).tag) wrap.append(tagChip(b.tag)); return wrap; };
+    events.sort((a, b) => a.date - b.date || (a.ev.start || '').localeCompare(b.ev.start || ''));
+    ag.innerHTML = '';
+    $('hubAgendaCount').textContent = events.length;
+    if (!events.length) ag.append(el('div', 'mnote', 'Keine Termine in den nächsten 60 Tagen.'));
+    events.slice(0, 40).forEach(x => {
+      const row = el('button', 'ag-row'); row.type = 'button';
+      const isGig = x.ev.category === 'auftritt';
+      row.append(el('span', 'ag-when', fmtDateOv(x.date, c.date) + (x.ev.allDay ? '' : ' · ' + fmtHHMM(x.ev.start, c.time))),
+        (() => { const t = el('span', 'ag-what'); t.append(el('b', null, (isGig ? '🎤 ' : '📅 ') + (x.ev.title || 'Termin'))); if (x.ev.location) t.append(el('small', null, ' · ' + x.ev.location)); return t; })(),
+        bandLabel(x.band));
+      row.addEventListener('click', () => { currentPage = isGig ? 'page3' : 'page2'; if (isGig) { gigsOpen.add(x.ev.id + '|' + dKey(x.date)); } enterApp(x.band); if (isGig) setTimeout(() => scrollToCard('gigList', x.ev.id + '|' + dKey(x.date)), 300); });
+      ag.append(row);
+    });
+    tasks.sort((a, b) => (a.when ? a.when.getTime() : 8.64e15) - (b.when ? b.when.getTime() : 8.64e15));
+    $('hubTaskCount').textContent = tasks.length;
+    if (!tasks.length) tk.append(el('div', 'mnote', 'Keine offenen Punkte – oder du hast noch keine übernommen.'));
+    tasks.slice(0, 40).forEach(x => {
+      const row = el('button', 'ag-row'); row.type = 'button';
+      row.append(el('span', 'ag-when', x.when ? fmtDateOv(x.when, c.date) : 'ohne Datum'),
+        (() => { const t = el('span', 'ag-what'); t.append(el('b', null, '☑️ ' + x.title)); t.append(el('small', null, ' · ' + [x.reiter, x.ev.title].filter(Boolean).join(' · '))); return t; })(),
+        bandLabel(x.band));
+      row.addEventListener('click', () => { currentPage = 'page4'; enterApp(x.band); });
+      tk.append(row);
+    });
+  }
   function renderSideUser() {
     setAvatar($('appAvatar'), profile.name, profile.photo, { zoom: false });
     const an = $('appName'); an.innerHTML = ''; an.append(profile.name);
@@ -1152,6 +1242,11 @@
   }
   $('homeBtn').addEventListener('click', () => enterHub());
   $('onlineBtn').addEventListener('click', () => { if (inHub) return; showPage('overview'); setTimeout(() => $('ovMembers').scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); });
+
+  // ----- Registerkarten in der Seitenleiste auf- und zuklappen -----
+  const applyNavFold = () => { const f = ls.get('navFolded') === '1'; $('nav').classList.toggle('folded', f); $('navFold').classList.toggle('folded', f); $('navFold').setAttribute('aria-expanded', String(!f)); };
+  $('navFold').addEventListener('click', () => { ls.set('navFolded', ls.get('navFolded') === '1' ? '0' : '1'); applyNavFold(); });
+  applyNavFold();
 
   // ================= Uhr und Datum oben links =================
   function tickSideClock() {
@@ -1262,6 +1357,11 @@
   document.querySelectorAll('.sidebar [data-page]').forEach(btn => btn.addEventListener('click', () => {
     if (suppressNavClick) { suppressNavClick = false; return; }
     if (inHub && (btn.dataset.page === 'profile' || btn.dataset.page === 'settings')) return openHubSection(btn.dataset.page);
+    if (inHub && btn.closest('#nav')) {
+      const ids = bandIdsOf(profile);
+      if (!ids.length) return flash('Tritt zuerst einer Band bei oder gründe eine.', true);
+      currentPage = btn.dataset.page; enterApp(ids.includes(profile.lastBand) ? profile.lastBand : ids[0]); return;
+    }
     showPage(btn.dataset.page);
   }));
 
@@ -5278,6 +5378,10 @@
         T('🎸', 'Band öffnen', 'Klick auf eine Band öffnet sie. Die zuletzt geöffnete steht zuoberst. Logo, Name und Tag erscheinen so, wie die Band es eingestellt hat.'),
         T('🔽', 'Aufklappen', '„Deine Bands“, „Profil“ und „Einstellungen“ lassen sich einzeln auf- und zuklappen – oder oben alle auf einmal.'),
         T('➕', 'Weitere Band', '„+ Band beitreten oder gründen“ öffnet im Profil den passenden Bereich.'),
+        T('📅', 'Deine Termine', '„Deine nächsten Termine“ zeigt Gigs und Termine aller deiner Bands der nächsten 60 Tage. Ein Klick öffnet den Termin in der Band.'),
+        T('☑️', 'Deine Checklisten-Punkte', 'Alle offenen Punkte, die du in irgendeiner Band übernommen hast – mit Band, was und wann.'),
+        T('🔍', 'Band suchen', '„Band suchen“ findet Bands nach Name oder Tag (sofern die Band sie sichtbar zeigt). Beitreten geht mit dem Einladungscode vom Admin.'),
+        T('🗂️', 'Registerkarten', 'Auch hier stehen die Registerkarten links. Ein Klick öffnet sie in deiner zuletzt geöffneten Band. Mit „Registerkarten ▾“ klappst du die Liste zu oder auf.'),
         T('↩️', 'Zurück hierher', 'In einer Band führt „Zurück zum Startbildschirm“ unten links wieder hierher. So wechselst du die Band.'),
       ],
       settings: [
@@ -5321,6 +5425,7 @@
     const pages = inHub ? ['home', 'profile', 'settings'] : ['home', 'overview', 'team', 'page2', 'page3', 'page4', 'page5', 'page6', 'profile', 'settings'];
     pages.filter(p => p !== currentPage).forEach(p => { const t = tipsFor(p); if (t.list.length) cat(t.name, ICONS[p], t.list, false); });
     const general = [
+      { icon: '🗂️', title: 'Registerkarten zuklappen', text: 'Über den Registerkarten steht „Registerkarten ▾“ – ein Klick klappt die Liste zu oder auf. Der Zustand bleibt in diesem Browser gespeichert.' },
       { icon: '↕️', title: 'Registerkarten sortieren', text: 'Halte eine Registerkarte in der Seitenleiste gedrückt und ziehe sie an die gewünschte Stelle. Die Reihenfolge wird in deinem Profil gespeichert.' },
       { icon: '🎸', title: 'Band wechseln', text: 'Unten links „Zurück zum Startbildschirm“ – dort wählst du eine andere Band, trittst einer weiteren bei oder gründest eine.' },
       { icon: '🕒', title: 'Uhr und Datum', text: 'Oben links unter dem Bandnamen laufen Uhr und Datum (tt.mm.jj, mm.tt.jj oder jj.mm.tt). Format und Uhr (digital oder analog) stellst du unter Einstellungen → Uhr & Datum ein.' },

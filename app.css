@@ -1,4 +1,4 @@
-/*! Stagemate v0.2.0 · Build 13 · 2026-11-16 */
+/*! Stagemate v0.2.1 · Build 14 · 2026-11-16 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1176,7 +1176,7 @@
 
   /* ---- v0.1.11: Startbildschirm, Uhr oben links, Online-Status, Tipps als Klappmenüs ---- */
   #bandSwitchWrap { display: none !important; }
-  #app.hub-mode #nav, #app.hub-mode #homeBtn, #app.hub-mode #onlineBtn { display: none !important; }
+  #app.hub-mode #homeBtn, #app.hub-mode #onlineBtn { display: none !important; }
   #page-home { max-width: 860px; }
   .home-head { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
   .home-head .avatar { width: 56px; height: 56px; flex: none; }
@@ -1280,3 +1280,31 @@
   .pv-brand .brand-logo { width: 36px; height: 36px; flex: none; border-radius: 9px; overflow: hidden; display: grid; place-items: center; }
   .pv-brand .brand-name { font-weight: 700; font-size: 14px; }
   .pv-brand .brand-sub { font-size: 10px; color: #9a9daa; letter-spacing: .08em; text-transform: uppercase; }
+
+  /* ---- v0.2.1: Registerkarten klappbar, Startbildschirm mit persönlicher Übersicht ---- */
+  .nav-fold { display: flex; align-items: center; justify-content: space-between; width: calc(100% - 20px); margin: 2px 10px 4px; padding: 6px 8px; border: none; background: none; color: #8a8d9b; font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; border-radius: 8px; }
+  .nav-fold:hover { color: #fff; background: var(--panel-hover); }
+  .nav-fold svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; transition: transform .2s; }
+  .nav-fold.folded svg { transform: rotate(-90deg); }
+  #nav.folded { display: none; }
+  .sidebar.collapsed .nav-fold { display: none; }
+  .sidebar.collapsed #nav.folded { display: block; }
+  .hub-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .hub-search { margin-top: 12px; }
+  .hub-search input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; }
+  .hub-search input:focus { outline: none; border-color: var(--accent); }
+  .hub-search-res { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; max-height: 280px; overflow: auto; }
+  .hs-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; background: var(--bg); font-size: 14px; }
+  .hs-row.mine { cursor: pointer; } .hs-row.mine:hover { background: var(--accent-soft); }
+  .hs-name { font-weight: 600; }
+  .hs-state { font-size: 12px; color: var(--muted); }
+  .hub-note { margin: 0 0 10px; }
+  .agenda-list { display: flex; flex-direction: column; gap: 6px; }
+  .ag-row { display: grid; grid-template-columns: 150px 1fr auto; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
+  .ag-row:hover { border-color: var(--accent); }
+  .ag-when { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--accent-dark); }
+  :root[data-theme="dark"] .ag-when { color: var(--accent); }
+  .ag-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ag-what small { color: var(--muted); }
+  .ag-band { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  @media (max-width: 640px) { .ag-row { grid-template-columns: 1fr; gap: 2px; } }

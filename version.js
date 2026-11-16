@@ -1,16 +1,22 @@
-/*! Stagemate v0.2.0 · Build 13 · 2026-11-16 */
+/*! Stagemate v0.2.1 · Build 14 · 2026-11-16 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.2.0';
-const APP_BUILD = 13;
+const APP_VERSION = 'v0.2.1';
+const APP_BUILD = 14;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.2.1', date: '2026-11-16', items: [
+    { type: 'fix', text: 'Registerkarten sind auch auf dem Startbildschirm sichtbar (öffnen die zuletzt geöffnete Band)' },
+    { type: 'neu', text: 'Registerkarten in der Seitenleiste auf- und zuklappbar' },
+    { type: 'neu', text: 'Startbildschirm: deine nächsten Termine und deine Checklisten-Punkte aus allen Bands' },
+    { type: 'neu', text: 'Startbildschirm: Band beitreten, Band gründen, Band suchen' },
+  ] },
   { version: 'v0.2.0', date: '2026-11-16', items: [
     { type: 'neu', text: 'Alpha-Phase (Fahrplan: Beta 0.5.0, Prerelease 0.9.0, Release 1.0.0)' },
     { type: 'neu', text: 'Alle Dateien tragen Version, Build und Datum in der ersten Zeile' },
