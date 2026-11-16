@@ -787,8 +787,60 @@
 
   $('loginBtn').addEventListener('click', () => {
     if (!bandIdsOf(profile).length || needsTerms()) return showTab('register');
-    enterApp(profile.lastBand);
+    showBandsOverview();
   });
+
+  // ================= Übersicht „Deine Bands“ (nach dem Anmelden) =================
+  let bandsPane = null;
+  function bandCard(id) {
+    const b = bands[id], sh = showOf(b);
+    const card = el('button', 'bov-card' + (id === profile.lastBand ? ' last' : '')); card.type = 'button';
+    const lg = el('span', 'bov-logo');
+    if (sh.logo && b.cfg.logo) lg.appendChild(logoNode(b.cfg.logo)); else lg.appendChild(defaultLogo());
+    const txt = el('span', 'bov-txt');
+    const title = el('span', 'bov-name');
+    // Sichtbarkeit der Band gilt auch hier; ist gar nichts sichtbar, bleibt der Name stehen
+    const showName = sh.name || !(sh.tag && b.tag);
+    if (showName) title.append(b.name);
+    if (sh.tag && b.tag) title.append(tagChip(b.tag));
+    const roles = rolesOf(profile, id);
+    const meta = el('span', 'bov-meta', (isFounder(id) ? 'Admin · ' : '') + (roles.length ? roles.join(' · ') : 'Keine Rolle'));
+    txt.append(title, meta);
+    if (id === profile.lastBand) txt.append(el('span', 'bov-last', 'Zuletzt geöffnet'));
+    card.append(lg, txt, el('span', 'bov-go', '›'));
+    card.addEventListener('click', () => enterApp(id));
+    return card;
+  }
+  function showBandsOverview() {
+    const ids = bandIdsOf(profile);
+    if (!ids.length) return showTab('register');
+    const card = document.querySelector('#auth .auth-side .card');
+    if (bandsPane) bandsPane.remove();
+    bandsPane = el('div'); bandsPane.id = 'bandsPane';
+    const head = el('div', 'bov-head');
+    const av = el('div', 'avatar'); setAvatar(av, profile.name, profile.photo);
+    const hl = el('div');
+    const h = el('h2', null, 'Deine Bands');
+    const hint = el('p', 'hint'); hint.append('Hallo ', el('strong', null, profile.name), '! Wähle die Band, mit der du arbeiten willst.');
+    hl.append(h, hint); head.append(av, hl);
+    const list = el('div', 'bov-list');
+    const sorted = [...ids].sort((a, c) => (a === profile.lastBand ? -1 : c === profile.lastBand ? 1 : (bands[a].name || '').localeCompare(bands[c].name || '', 'de')));
+    sorted.forEach(id => list.append(bandCard(id)));
+    const foot = el('div', 'bov-foot');
+    const add = el('button', 'linkish-btn', '+ Band beitreten oder gründen'); add.type = 'button';
+    add.addEventListener('click', () => { hideBandsOverview(); showTab('register'); });
+    const out = el('button', 'linkish-btn bov-out', 'Abmelden'); out.type = 'button';
+    out.addEventListener('click', async () => { ls.sdel('bandLoggedIn'); if (await Data.signOut()) return; hideBandsOverview(); showTab('login'); });
+    foot.append(add, out);
+    bandsPane.append(head, list, foot);
+    card.prepend(bandsPane);
+    card.classList.add('ov-mode');
+  }
+  function hideBandsOverview() {
+    const card = document.querySelector('#auth .auth-side .card');
+    if (card) card.classList.remove('ov-mode');
+    if (bandsPane) { bandsPane.remove(); bandsPane = null; }
+  }
 
   // ================= App =================
   function enterApp(bandId) {
@@ -796,6 +848,7 @@
     if (typeof showTipsHint === 'function') showTipsHint();
     const ids = bandIdsOf(profile);
     if (!ids.length) return;
+    hideBandsOverview();
     currentBand = ids.includes(bandId) ? bandId : ids[0];
     ls.sset('bandLoggedIn', '1');
     applyNavOrder();
@@ -4791,6 +4844,7 @@
       { icon: '⚙️', title: 'Einstellungen', text: 'Unten links: Darstellung (Hell, Dunkel, Automatisch), Mauszeiger, Uhr & Datum, Sichtbarkeit deiner Kontaktangaben pro Band und die Sortierung der Checkliste.' },
       { icon: '🚧', title: 'Pre-Alpha', text: 'Stagemate ist noch in einer frühen Pre-Alpha-Version und verändert sich laufend. Die aktuelle Versionsnummer steht ganz unten links. Der Hinweis dazu erscheint jedes Mal auf dem Anmeldebildschirm und lässt sich dort über das Abzeichen „Pre-Alpha“ wieder öffnen.' },
       { icon: '💬', title: 'Support', text: 'Unten links „Support“ öffnet ein Fenster mit den Links zu Instagram und TikTok (housi_666) – für Fragen, Probleme oder Ideen.' },
+      { icon: '🎸', title: 'Deine Bands', text: 'Nach dem Anmelden siehst du alle deine Bands mit Logo, Tag und deinen Rollen. Ein Klick öffnet die Band; die zuletzt geöffnete steht zuoberst.' },
       { icon: '👁', title: 'Passwort ansehen', text: 'Das Auge im Passwortfeld gedrückt halten – solange du drückst, siehst du das Passwort im Klartext.' },
       { icon: '🔐', title: 'Konto', text: 'Web-Version: Unter „Profil & Bands“ → „Konto“ änderst du dein Passwort oder löschst dein Konto. Gründer/Admins lösen vorher ihre Band auf.' },
       { icon: '📜', title: 'Nutzungsbedingungen & Datenschutz', text: 'Findest du unten im Startbildschirm und im Support-Fenster. Bei einer neuen Fassung musst du sie beim nächsten Anmelden erneut akzeptieren.' },
@@ -4812,6 +4866,7 @@
   $('logoutBtn').addEventListener('click', async () => {
     ls.sdel('bandLoggedIn');
     if (await Data.signOut()) return;   // Web-Version: Konto abmelden, Seite lädt neu
+    hideBandsOverview();
     viewAs = null; renderViewAs();
     discardDraft(); setDraft = null; applyTheme(); applyCursor();
     tipsHintDone = false;   // beim nächsten Anmelden erscheint der Tipps-Hinweis wieder
@@ -4997,8 +5052,11 @@
     showTab(profile ? 'login' : 'register');
     // Neue Fassung der Nutzungsbedingungen: zuerst akzeptieren
     if (profile && needsTerms()) { showTab('register'); setMsg($('regMsg'), 'Bitte akzeptiere die Nutzungsbedingungen, um weiterzumachen.', 'error'); return; }
-    // Web-Version: nach der Konto-Anmeldung direkt in die App
-    if (profile && bandIdsOf(profile).length && (ls.sget('bandLoggedIn') === '1' || Data.backend === 'firebase')) enterApp(profile.lastBand);
+    if (!profile || !bandIdsOf(profile).length) return;
+    // Neu geladen während der Sitzung: direkt zurück in die App
+    if (ls.sget('bandLoggedIn') === '1') return enterApp(profile.lastBand);
+    // Web-Version: nach der Konto-Anmeldung zuerst die Übersicht „Deine Bands“
+    if (Data.backend === 'firebase') showBandsOverview();
   }
 
   init();
