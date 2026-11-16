@@ -1,15 +1,27 @@
+/*! Stagemate v0.2.0 · Build 13 · 2026-11-16 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.1.11';
-const APP_BUILD = 12;
+const APP_VERSION = 'v0.2.0';
+const APP_BUILD = 13;
 const APP_BUILD_DATE = '2026-11-16';
-const APP_PHASE = 'Pre-Alpha';
+const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.2.0', date: '2026-11-16', items: [
+    { type: 'neu', text: 'Alpha-Phase (Fahrplan: Beta 0.5.0, Prerelease 0.9.0, Release 1.0.0)' },
+    { type: 'neu', text: 'Alle Dateien tragen Version, Build und Datum in der ersten Zeile' },
+    { type: 'neu', text: 'Register «Setlist» als Baustelle mit blauem Hinweis und Zurück-Knopf' },
+    { type: 'neu', text: 'Vor- und Zurück-Knöpfe oben neben dem Seitentitel' },
+    { type: 'neu', text: 'Glühbirne mit kleiner Vorschau bei allen optischen Einstellungen' },
+    { type: 'neu', text: 'Testdaten-Generator (testdaten.html): 30 Konten, 5 Bands, 7 Gigs mit Checklisten' },
+    { type: 'besser', text: 'Seitenleiste: Bandname und Logo zuoberst, darunter Uhr und Datum übereinander, Trennlinie zu den Registern' },
+    { type: 'besser', text: 'Datumsformat nur noch tt.mm.jj, mm.tt.jj oder jj.mm.tt' },
+    { type: 'besser', text: 'Finanzen: blauer Hinweis «Befindet sich im Bau» oben, Sperrmeldung wie bei anderen Sperren' },
+  ] },
   { version: 'v0.1.11', date: '2026-11-16', items: [
     { type: 'neu', text: 'Startbildschirm: Bands, Profil und Einstellungen auf einem Bildschirm, als Klappmenüs' },
     { type: 'neu', text: '«Zurück zum Startbildschirm» unten links; Bandauswahl in der Seitenleiste entfernt' },

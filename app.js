@@ -1,3 +1,4 @@
+/*! Stagemate v0.2.0 · Build 13 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -14,6 +15,7 @@
     { id: 'page3', title: 'Gigs' },
     { id: 'page4', title: 'Checkliste' },
     { id: 'page5', title: 'Finanzen' },
+    { id: 'page6', title: 'Setlist' },
   ];
   const LEVELS = { edit: 'Bearbeiten', read: 'Nur lesen', hidden: 'Ausgeblendet' };
   const PAGE_TITLES = { home: 'Startbildschirm', overview: 'Übersicht', profile: 'Profil & Bands', team: 'Verwaltung', settings: 'Einstellungen' };
@@ -1021,11 +1023,35 @@
     setTimeout(() => { b.textContent = 'Kopieren'; }, 1600);
   });
 
+  // ----- Vor / Zurück (wie im Browser) -----
+  const navHist = []; let navPos = -1, navSilent = false;
+  function navRecord(page) {
+    if (navSilent) return;
+    const e = { page, band: inHub ? null : currentBand, hub: inHub };
+    const cur = navHist[navPos];
+    if (cur && cur.page === e.page && cur.band === e.band && cur.hub === e.hub) return;
+    navHist.splice(navPos + 1); navHist.push(e); if (navHist.length > 50) navHist.shift(); navPos = navHist.length - 1;
+    navButtons();
+  }
+  function navButtons() { $('navBack').disabled = navPos <= 0; $('navFwd').disabled = navPos >= navHist.length - 1; }
+  function navGo(delta) {
+    const i = navPos + delta; if (i < 0 || i >= navHist.length) return;
+    const e = navHist[i]; navPos = i; navSilent = true;
+    try {
+      if (e.hub) { if (!inHub) enterHub(); else showPage('home'); }
+      else if (inHub || e.band !== currentBand) { if (bandIdsOf(profile).includes(e.band)) { currentPage = e.page; enterApp(e.band); } }
+      else showPage(e.page);
+    } finally { navSilent = false; navButtons(); }
+  }
+  $('navBack').addEventListener('click', () => navGo(-1));
+  $('navFwd').addEventListener('click', () => navGo(1));
+  $('setlistBack').addEventListener('click', () => { if (navPos > 0) navGo(-1); else showPage('overview'); });
   function showPage(page) {
     const reg = REGISTERS.find(r => r.id === page);
     if (reg && levelFor(currentBand, page) === 'hidden') page = 'overview';
     currentPage = page;
     placeUI(page === 'home' ? 'hub' : page);
+    navRecord(page);
     $('page-home').classList.toggle('hidden', page !== 'home');
     if (page === 'home') { renderHub(); if (!isSettingsDirty()) setDraft = null; renderSettingsAll(); }
     document.querySelectorAll('.sidebar [data-page]').forEach(b => b.classList.toggle('active', b.dataset.page === page));
@@ -1037,13 +1063,14 @@
     if (page === 'profile') renderAccount();
     $('page-team').classList.toggle('hidden', page !== 'team');
     $('page-settings').classList.toggle('hidden', page !== 'settings');
-    $('page-placeholder').classList.toggle('hidden', !reg || page === 'page2' || page === 'page3' || page === 'page4' || page === 'page5');
+    $('page-placeholder').classList.toggle('hidden', !reg || page === 'page2' || page === 'page3' || page === 'page4' || page === 'page5' || page === 'page6');
     $('page-gigs').classList.toggle('hidden', page !== 'page3');
     if (page === 'page3') renderGigs();
     $('page-checklist').classList.toggle('hidden', page !== 'page4');
     if (page === 'page4') renderChecklistPage();
     $('page-finance').classList.toggle('hidden', page !== 'page5');
     if (page === 'page5') { openFinance(); $('buildModal').classList.remove('hidden'); }
+    $('page-setlist').classList.toggle('hidden', page !== 'page6');
     $('page-calendar').classList.toggle('hidden', page !== 'page2');
     if (page === 'page2') renderCalendar(0);
     if (page === 'profile' && !isProfileDirty()) prepareForm();
@@ -1188,7 +1215,7 @@
     const d = new Date(ms), c = ovCfg(), t = fmtTimeOv(d, c.time, false), today = dOnly(new Date());
     if (sameDay(d, today)) return 'heute ' + t;
     if (sameDay(d, addDays(today, -1))) return 'gestern ' + t;
-    return fmtDateOv(d, 'short') + ' ' + t;
+    return fmtDateOv(d, c.date) + ' ' + t;
   }
   function renderOvMembers() {
     const box = $('ovmList'); if (!box) return; box.innerHTML = '';
@@ -1487,6 +1514,8 @@
       mountTagEditor($('aTagEditor'), { getName: () => draftName, getTag: () => draftTag, setTag: v => { draftTag = v; updateDirty(); }, bandId: () => currentBand });
       { const left = tagCooldownLeft(band); $('aTagEditor')._note(left > 0 ? `Der Tag kann in ${Math.ceil(left / 60000)} Min. wieder geändert werden.` : ''); }
       [['aShowLogo', 'logo'], ['aShowName', 'name'], ['aShowTag', 'tag']].forEach(([id, k]) => { $(id).checked = draftShow[k] !== false; });
+      addBulb($('aShowLogo').closest('.field').querySelector('.flabel'), 'brand', 'Sichtbarkeit der Band');
+      addBulb($('aTagEditor').closest('.field').querySelector('.flabel'), 'tag', 'Band-Tag');
       renderAddForm();
     }
     renderMembers(true);
@@ -1628,18 +1657,17 @@
     { id: 'task', title: 'Dein nächster Checklisten-Punkt' },
   ];
   const DATE_FMTS = [
-    { id: 'long', label: 'Samstag, 14. November 2026' },
-    { id: 'medium', label: 'Sa, 14. Nov 2026' },
-    { id: 'short', label: '14.11.2026' },
-    { id: 'iso', label: '2026-11-14' },
+    { id: 'dmy', label: 'tt.mm.jj' },
+    { id: 'mdy', label: 'mm.tt.jj' },
+    { id: 'ymd', label: 'jj.mm.tt' },
   ];
-  const ovDefaults = () => ({ show: { band: true, roles: true, clock: true, gig: true, event: true, task: true }, time: '24', face: 'digital', date: 'long', order: OV_WIDGETS.map(w => w.id) });
+  const ovDefaults = () => ({ show: { band: true, roles: true, clock: true, gig: true, event: true, task: true }, time: '24', face: 'digital', date: 'dmy', order: OV_WIDGETS.map(w => w.id) });
   // Einstellungen pro Person im Profil (overview); fehlende Werte mit Standard ergänzen
   function ovCfg() {
     const d = ovDefaults(), o = (profile && profile.overview) || {};
     const ord = Array.isArray(o.order) ? o.order.filter(id => OV_WIDGETS.some(w => w.id === id)) : [];
     OV_WIDGETS.forEach(w => { if (!ord.includes(w.id)) { const i = d.order.indexOf(w.id); ord.splice(Math.min(i, ord.length), 0, w.id); } });
-    return { order: ord, show: { ...d.show, ...(o.show || {}) }, time: o.time === '12' ? '12' : '24', face: o.face === 'analog' ? 'analog' : 'digital', date: DATE_FMTS.some(x => x.id === o.date) ? o.date : 'long' };
+    return { order: ord, show: { ...d.show, ...(o.show || {}) }, time: o.time === '12' ? '12' : '24', face: o.face === 'analog' ? 'analog' : 'digital', date: DATE_FMTS.some(x => x.id === o.date) ? o.date : 'dmy' };
   }
   async function ovSet(fn) {
     if (!profile) return;
@@ -1651,10 +1679,10 @@
   const tzName = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Unbekannt'; } catch (e) { return 'Unbekannt'; } };
   const tzOffset = (d = new Date()) => { const m = -d.getTimezoneOffset(); const sgn = m >= 0 ? '+' : '−'; const a = Math.abs(m); return `UTC${sgn}${pad2(Math.floor(a / 60))}:${pad2(a % 60)}`; };
   function fmtDateOv(d, f) {
-    if (f === 'short') return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()}`;
-    if (f === 'iso') return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-    if (f === 'medium') return `${CAL_WD[wdIdx(d)]}, ${d.getDate()}. ${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
-    return fmtLong(d);
+    const dd = pad2(d.getDate()), mm = pad2(d.getMonth() + 1), yy = String(d.getFullYear()).slice(-2);
+    if (f === 'mdy') return `${mm}.${dd}.${yy}`;
+    if (f === 'ymd') return `${yy}.${mm}.${dd}`;
+    return `${dd}.${mm}.${yy}`;
   }
   function fmtTimeOv(d, f, sec) {
     let h = d.getHours(); const m = pad2(d.getMinutes()), s2 = pad2(d.getSeconds());
@@ -1984,7 +2012,7 @@
   $('page-finance').addEventListener('click', e => {
     const t = e.target.closest('button, select, input, a, .fin-row, label');
     if (!t) return;
-    e.preventDefault(); e.stopPropagation(); flash(FIN_LOCK, true);
+    e.preventDefault(); e.stopPropagation(); previewBlocked(e, FIN_LOCK);
   }, true);
   ['mousedown', 'keydown', 'change', 'focusin'].forEach(ev => $('page-finance').addEventListener(ev, e => {
     if (e.target.closest('select, input')) { e.preventDefault(); if (ev === 'focusin') e.target.blur(); }
@@ -2076,7 +2104,7 @@
     if (FIN_CATS[t].includes(cur)) sel.value = cur;
   }
   function openFinModal(e, type) {
-    if (FIN_LOCKED) return flash(FIN_LOCK, true);
+    if (FIN_LOCKED) return previewBlocked(null, FIN_LOCK);
     finEdit = e ? { ...e } : null;
     const can = finCanEdit() && !viewAs;
     $('finTitleH').textContent = e ? (can ? 'Eintrag bearbeiten' : 'Eintrag') : (type === 'out' ? 'Neue Ausgabe' : 'Neue Einnahme');
@@ -2134,7 +2162,7 @@
   });
   // CSV-Export (Excel-tauglich); Dateiname enthält die Versionsnummer
   $('finExport').addEventListener('click', async () => {
-    if (FIN_LOCKED) return flash(FIN_LOCK, true);
+    if (FIN_LOCKED) return previewBlocked(null, FIN_LOCK);
     const list = finEntries.filter(e => (e.date || '').startsWith(String(finYear))).sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.time || '').localeCompare(b.time || ''));
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     const rows = [['Datum', 'Zeit', 'Typ', 'Bezeichnung', 'Kategorie', 'Gig', 'Betrag CHF', 'Notiz'].map(q).join(';')];
@@ -4087,6 +4115,80 @@
   }
   const isSettingsDirty = () => !!setDraft && (setDraft.cursor !== cursorPref || setDraft.theme !== themePref || setDraft.clSort !== clSortGlobal() || setDraft.clearBands.length > 0 || JSON.stringify(setDraft.share) !== JSON.stringify(shareState()) || clockChanged(setDraft) || setDraft.photoPublic !== !(profile && profile.photoPublic === false));
   const clockChanged = d => { const oc = ovCfg(); return !!d.clock && (d.clock.time !== oc.time || d.clock.face !== oc.face || d.clock.date !== oc.date); };
+  // ================= Vorschau per Glühbirne =================
+  const pvPop = el('div', 'pv-pop hidden'); document.body.appendChild(pvPop);
+  let pvFor = null, pvHideT = null;
+  const pvHide = () => { pvPop.classList.add('hidden'); pvFor = null; };
+  function bulb(build, title) {
+    const b = el('button', 'pv-bulb', '💡'); b.type = 'button';
+    b.title = 'Vorschau: ' + title; b.setAttribute('aria-label', b.title);
+    const show = () => {
+      clearTimeout(pvHideT);
+      pvFor = b; pvPop.innerHTML = '';
+      pvPop.append(el('div', 'pv-t', '💡 ' + title), build());
+      pvPop.classList.remove('hidden');
+      const r = b.getBoundingClientRect(), w = pvPop.offsetWidth, h = pvPop.offsetHeight;
+      let left = Math.min(Math.max(8, r.left - 10), innerWidth - w - 8), top = r.bottom + 8;
+      if (top + h > innerHeight - 8) top = Math.max(8, r.top - h - 8);
+      pvPop.style.left = left + 'px'; pvPop.style.top = top + 'px';
+    };
+    b.addEventListener('mouseenter', show);
+    b.addEventListener('mouseleave', () => { pvHideT = setTimeout(() => { if (!pvPop.matches(':hover')) pvHide(); }, 180); });
+    b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); if (pvFor === b && !pvPop.classList.contains('hidden')) pvHide(); else show(); });
+    return b;
+  }
+  pvPop.addEventListener('mouseleave', () => { pvHideT = setTimeout(pvHide, 180); });
+  document.addEventListener('click', e => { if (!pvPop.contains(e.target)) pvHide(); });
+  window.addEventListener('scroll', pvHide, true);
+  const pvLcd = (txt, cls) => { const b = el('div', 'sc-box ' + (cls || '')); b.textContent = txt; return b; };
+  const pvCol = (...kids) => { const c = el('div', 'pv-col'); c.append(...kids); return c; };
+  const pvCap = t => el('div', 'pv-cap', t);
+  const PV = {
+    theme() {
+      const pref = (setDraft && setDraft.theme) || themePref;
+      const dark = pref === 'dark' || (pref === 'system' && darkMq && darkMq.matches);
+      const m = el('div', 'pv-mini' + (dark ? ' dark' : ''));
+      m.append(el('div', 'pm-side'), (() => { const c = el('div', 'pm-main'); c.append(el('div', 'pm-bar'), el('div', 'pm-card'), el('div', 'pm-card short')); return c; })());
+      return pvCol(m, pvCap(pref === 'system' ? 'Automatisch – gerade ' + (dark ? 'dunkel' : 'hell') : dark ? 'Dunkel' : 'Hell'));
+    },
+    cursor() {
+      const cur = (setDraft && setDraft.cursor) || cursorPref, o = CURSORS.find(x => x.id === cur) || CURSORS[0];
+      const ic = el('div', 'pv-cursor'); ic.innerHTML = CURSOR_ICONS[o.id] || handIcon(o.emoji);
+      return pvCol(ic, pvCap(o.label));
+    },
+    time() { const d = settingsDraft().clock, now = new Date(); return pvCol(pvLcd(fmtTimeOv(now, d.time, true), 'sc-time'), pvCap(d.time === '12' ? '12 Stunden' : '24 Stunden')); },
+    face() {
+      const d = settingsDraft().clock, now = new Date();
+      const t = pvLcd('', 'sc-time' + (d.face === 'analog' ? ' analog' : ''));
+      if (d.face === 'analog') t.innerHTML = analogSvg(now); else t.textContent = fmtTimeOv(now, d.time, true);
+      const box = el('div', 'side-clock stacked pv-side'); box.append(t, pvLcd(fmtDateOv(now, d.date), 'sc-date'));
+      return pvCol(box, pvCap('So erscheint es oben links'));
+    },
+    date() { const d = settingsDraft().clock; return pvCol(pvLcd(fmtDateOv(new Date(), d.date), 'sc-date'), pvCap(DATE_FMTS.find(x => x.id === d.date).label)); },
+    photo() {
+      const on = settingsDraft().photoPublic;
+      const a = el('div', 'avatar'); setAvatar(a, profile.name, profile.photo, { zoom: false, locked: !on });
+      return pvCol(a, pvCap(on ? 'Andere sehen dein Profilbild' : 'Andere sehen es verschwommen mit Schloss'));
+    },
+    share() {
+      const sh = settingsDraft().share, id = bandIdsOf(profile)[0], x = (id && sh[id]) || {};
+      const c = el('div', 'pv-card'); c.append(el('b', null, profile.name), el('div', null, '✉️ ' + (x.email ? (profile.email || 'deine E-Mail') : 'verborgen')), el('div', null, '📞 ' + (x.phone ? (profile.phone || 'deine Nummer') : 'verborgen')));
+      return pvCol(c, pvCap(id ? 'So sehen dich die Mitglieder von „' + bands[id].name + '“' : 'Du bist in keiner Band'));
+    },
+    brand() {
+      const b = bands[currentBand], sh = draftShow || showOf(b), lg = b && (draft ? draft.logo : b.cfg.logo);
+      const box = el('div', 'pv-brand');
+      const logo = el('span', 'brand-logo' + (lg ? ' custom' : '') + (lg && !sh.logo ? ' img-locked' : ''));
+      logo.appendChild(lg ? logoNode(lg) : defaultLogo());
+      const nm = el('div', 'brand-name'); if (sh.name) nm.append(draftName || b.name); if (sh.tag && draftTag) nm.append(tagChip(draftTag));
+      const tx = el('div', 'brand-text'); tx.append(nm, el('div', 'brand-sub', 'Band-Verwaltung'));
+      box.append(logo, tx);
+      return pvCol(box, pvCap('So sehen es die Mitglieder (ohne Admin/Organisation)'));
+    },
+    tag() { const t = draftTag || regTag; const c = el('div', 'pv-card'); const n = el('b'); n.append('Housi'); if (t) n.append(tagChip(t)); c.append(n); return pvCol(c, pvCap(t ? 'Tag neben Nickname und Bandname: ' + fmtTag(t) : 'Noch kein Tag gewählt')); },
+  };
+  function addBulb(target, key, title) { if (!target || target.querySelector(':scope > .pv-bulb')) return; target.appendChild(bulb(PV[key], title)); }
+
   // Einstellungen „Uhr & Datum“ (gilt für die Übersicht und alle Zeitangaben dort)
   function renderClockSettings() {
     const box = $('clockSettings'); if (!box || !profile) return;
@@ -4094,16 +4196,16 @@
     const d = settingsDraft().clock;
     const seg = (label, opts, key) => {
       const f = el('div', 'field');
-      f.appendChild(el('label', null, label));
+      const lb = el('label', null, label); lb.appendChild(bulb(PV[key === 'time' ? 'time' : 'face'], label)); f.appendChild(lb);
       const g = el('div', 'seg ovm-seg set-seg');
       opts.forEach(([v, t]) => { const b = el('button', d[key] === v ? 'on' : '', t); b.type = 'button'; b.addEventListener('click', () => { d[key] = v; renderClockSettings(); updateDirty(); }); g.appendChild(b); });
       f.appendChild(g); box.appendChild(f);
     };
     seg('Zeitformat', [['24', '24 Stunden (20:00)'], ['12', '12 Stunden (8:00 PM)']], 'time');
     seg('Uhr', [['digital', 'Digital'], ['analog', 'Analog']], 'face');
-    const f = el('div', 'field'); const l = el('label', null, 'Datumsformat'); l.htmlFor = 'setDateFmt';
+    const f = el('div', 'field'); const l = el('label', null, 'Datumsformat'); l.htmlFor = 'setDateFmt'; l.appendChild(bulb(PV.date, 'Datumsformat'));
     const sel = el('select'); sel.id = 'setDateFmt';
-    DATE_FMTS.forEach(x => sel.appendChild(new Option(fmtDateOv(new Date(), x.id), x.id)));
+    DATE_FMTS.forEach(x => sel.appendChild(new Option(`${x.label}  (${fmtDateOv(new Date(), x.id)})`, x.id)));
     sel.value = d.date;
     sel.addEventListener('change', () => { d.date = sel.value; updateDirty(); });
     f.append(l, sel); box.appendChild(f);
@@ -4113,6 +4215,13 @@
   // Sichtbarkeit: Profilbild + Hinweis/Knopf zur Bandsichtbarkeit (nur auf einer Bandseite)
   function renderVis() {
     if (!profile) return;
+    addBulb($('setPhotoPublic').closest('.share-row'), 'photo', 'Profilbild');
+    addBulb(document.querySelector('#visPanel > .share-title'), 'share', 'E-Mail und Telefon');
+    document.querySelectorAll('.settings-wrap .panel > h3').forEach(h => {
+      const t = h.textContent.trim();
+      if (t.startsWith('Darstellung')) addBulb(h, 'theme', 'Darstellung');
+      if (t.startsWith('Mauszeiger')) addBulb(h, 'cursor', 'Mauszeiger');
+    });
     $('setPhotoPublic').checked = settingsDraft().photoPublic;
     $('visToTeam').classList.toggle('hidden', inHub || !currentBand);
   }
@@ -5139,6 +5248,10 @@
         T('👀', 'Nur lesen', 'Du hast für die Checkliste nur Leserechte – du siehst alles, kannst aber nichts ändern.', levelFor(currentBand, 'page4') === 'read'),
         T('🕰️', 'Vergangene', 'Checklisten vergangener Termine sind ganz unten unter „Vergangene“ aufklappbar.'),
       ],
+      page6: [
+        T('🚧', 'Im Bau', 'Die Setlist entsteht gerade: Songs, Reihenfolge per Drag & Drop, Längen und Gesamtdauer, Intro/Outro, Vorlagen und Export.'),
+        T('↩️', 'Zurück', 'Unten rechts „Zurück“ oder oben ‹ führt zur vorherigen Seite.'),
+      ],
       page5: [
         T('💰', 'Finanzen', 'Hier erfasst ihr Einnahmen und Ausgaben der Band. Oben siehst du Einnahmen, Ausgaben und den Saldo des gewählten Jahres, darunter die Aufteilung nach Kategorie.'),
         T('➕', 'Eintrag erfassen', '„+ Einnahme“ oder „− Ausgabe“: Betrag in CHF, Datum, optional die Zeit, Bezeichnung, Kategorie, optional einen Gig verknüpfen und eine Notiz. Ein Klick auf einen Eintrag öffnet ihn zum Bearbeiten oder Löschen.', finCanEdit()),
@@ -5178,7 +5291,7 @@
         T('💾', 'Speichern', 'Änderungen in den Einstellungen gelten erst nach „Speichern“ – wie in der Verwaltung. Solange etwas offen ist, steht oben ein oranger Hinweis mit „Speichern“ und „Verwerfen“, auch wenn du die Seite wechselst.'),
       ],
     };
-    const names = { home: 'Startbildschirm', team: 'Verwaltung', overview: 'Übersicht', page2: 'Kalender', page3: 'Gigs', page4: 'Checkliste', page5: 'Finanzen', profile: 'Profil & Bands', settings: 'Einstellungen' };
+    const names = { home: 'Startbildschirm', team: 'Verwaltung', overview: 'Übersicht', page2: 'Kalender', page3: 'Gigs', page4: 'Checkliste', page5: 'Finanzen', page6: 'Setlist', profile: 'Profil & Bands', settings: 'Einstellungen' };
     return { name: names[page] || 'diese Seite', list: (t[page] || []).filter(Boolean) };
   }
   function openTips() {
@@ -5202,21 +5315,23 @@
       });
       d.append(sm, inner); body.append(d);
     };
-    const ICONS = { home: '🏠', overview: '🧭', team: '👥', page2: '📅', page3: '🎤', page4: '☑️', page5: '💰', profile: '👤', settings: '⚙️' };
+    const ICONS = { home: '🏠', overview: '🧭', team: '👥', page2: '📅', page3: '🎤', page4: '☑️', page5: '💰', page6: '🎼', profile: '👤', settings: '⚙️' };
     const cur = tipsFor(currentPage);
     cat('Diese Seite: ' + cur.name, '📍', cur.list.length ? cur.list : [{ icon: 'ℹ️', title: 'Keine Tipps', text: 'Für diese Seite gibt es noch keine Tipps.' }], true);
-    const pages = inHub ? ['home', 'profile', 'settings'] : ['home', 'overview', 'team', 'page2', 'page3', 'page4', 'page5', 'profile', 'settings'];
+    const pages = inHub ? ['home', 'profile', 'settings'] : ['home', 'overview', 'team', 'page2', 'page3', 'page4', 'page5', 'page6', 'profile', 'settings'];
     pages.filter(p => p !== currentPage).forEach(p => { const t = tipsFor(p); if (t.list.length) cat(t.name, ICONS[p], t.list, false); });
     const general = [
       { icon: '↕️', title: 'Registerkarten sortieren', text: 'Halte eine Registerkarte in der Seitenleiste gedrückt und ziehe sie an die gewünschte Stelle. Die Reihenfolge wird in deinem Profil gespeichert.' },
       { icon: '🎸', title: 'Band wechseln', text: 'Unten links „Zurück zum Startbildschirm“ – dort wählst du eine andere Band, trittst einer weiteren bei oder gründest eine.' },
-      { icon: '🕒', title: 'Uhr und Datum', text: 'Ganz oben links laufen Uhr und Datum. Format und Uhr (digital oder analog) stellst du unter Einstellungen → Uhr & Datum ein.' },
+      { icon: '🕒', title: 'Uhr und Datum', text: 'Oben links unter dem Bandnamen laufen Uhr und Datum (tt.mm.jj, mm.tt.jj oder jj.mm.tt). Format und Uhr (digital oder analog) stellst du unter Einstellungen → Uhr & Datum ein.' },
       { icon: '🟢', title: 'Online-Anzeige', text: 'Unter dem Bandnamen steht, wie viele Mitglieder gerade online sind. Ein Klick öffnet die Übersicht mit allen Mitgliedern.' },
       { icon: '◀️', title: 'Seitenleiste einklappen', text: 'Ganz unten „Einklappen“ – dann bleiben nur die Symbole sichtbar.' },
       { icon: '📱', title: 'Auf dem Handy', text: 'Vom linken Rand nach rechts wischen öffnet die Seitenleiste, nach links wischen oder daneben tippen schliesst sie. Solange sie offen ist, ist der Rest gesperrt.' },
       { icon: '💡', title: 'Tipps', text: 'Dieser Knopf unten links zeigt immer die Tipps zur Seite, auf der du gerade bist. Beim Öffnen der App blinkt er kurz zur Erinnerung.' },
       { icon: '⚙️', title: 'Einstellungen', text: 'Unten links: Darstellung (Hell, Dunkel, Automatisch), Mauszeiger, Uhr & Datum, Sichtbarkeit und die Sortierung der Checkliste.' },
-      { icon: '🚧', title: 'Pre-Alpha', text: 'Stagemate ist noch in einer frühen Pre-Alpha-Version und verändert sich laufend. Die aktuelle Versionsnummer steht ganz unten links. Der Hinweis dazu erscheint jedes Mal auf dem Anmeldebildschirm und lässt sich dort über das Abzeichen „Pre-Alpha“ wieder öffnen.' },
+      { icon: '🚧', title: 'Alpha', text: 'Stagemate ist in der Alpha-Phase und verändert sich laufend. Geplant: Beta ab 0.5.0, Prerelease ab 0.9.0, Release mit 1.0.0. Die Versionsnummer steht ganz unten links; der Hinweis erscheint auf dem Anmeldebildschirm und lässt sich über das Abzeichen „Alpha“ wieder öffnen.' },
+      { icon: '💡', title: 'Vorschau', text: 'Neben optischen Einstellungen steht eine kleine Glühbirne. Darüberfahren oder antippen zeigt eine kleine Vorschau, wie es aussehen wird.' },
+      { icon: '⏪', title: 'Vor und Zurück', text: 'Oben links neben dem Seitentitel: ‹ führt zur vorherigen Seite, › wieder vorwärts – wie im Browser.' },
       { icon: '💬', title: 'Support', text: 'Unten links „Support“ öffnet ein Fenster mit den Links zu Instagram und TikTok (housi_666) – für Fragen, Probleme oder Ideen.' },
       { icon: '🔍', title: 'Bilder gross ansehen', text: 'Ein Klick auf ein Profilbild oder Bandlogo zeigt es gross an. Verborgene Bilder sind verschwommen und mit einem Schloss markiert.' },
       { icon: '🙈', title: 'Profilbild verbergen', text: 'Unter Einstellungen → Sichtbarkeit „Profilbild für andere sichtbar“ ausschalten. Andere sehen dann nur noch ein verschwommenes Bild mit Schloss.' },

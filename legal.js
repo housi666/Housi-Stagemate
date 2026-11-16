@@ -1,3 +1,4 @@
+/*! Stagemate v0.2.0 · Build 13 · 2026-11-16 */
 /* Stagemate – Nutzungsbedingungen und Datenschutzerklärung
  * Vorlage, keine Rechtsberatung. Bei Änderungen LEGAL_VERSION anpassen:
  * dann müssen alle Benutzer die neue Fassung erneut akzeptieren.
@@ -9,7 +10,7 @@ const LEGAL_TERMS = `
 <p>Stagemate ist ein privates, nicht-kommerzielles Projekt von Housi Guntern, Schweiz. Kontakt: Instagram oder TikTok <b>housi_666</b>.</p>
 
 <h4>2. Gegenstand</h4>
-<p>Stagemate ist eine kostenlose Web-App zur Organisation von Bands. Sie befindet sich in der <b>Pre-Alpha-Phase</b>. Funktionen, Aussehen und gespeicherte Daten können sich jederzeit ändern, eingeschränkt oder ganz eingestellt werden. Es besteht kein Anspruch auf Verfügbarkeit, Fehlerfreiheit oder dauerhafte Speicherung. Sichere wichtige Informationen zusätzlich selbst.</p>
+<p>Stagemate ist eine kostenlose Web-App zur Organisation von Bands. Sie befindet sich in der <b>Alpha-Phase</b>. Funktionen, Aussehen und gespeicherte Daten können sich jederzeit ändern, eingeschränkt oder ganz eingestellt werden. Es besteht kein Anspruch auf Verfügbarkeit, Fehlerfreiheit oder dauerhafte Speicherung. Sichere wichtige Informationen zusätzlich selbst.</p>
 
 <h4>3. Konto</h4>
 <p>Du machst wahre Angaben, hältst dein Passwort geheim und bist für alle Aktivitäten in deinem Konto verantwortlich. Die Nutzung ist ab 16 Jahren erlaubt, jüngere Personen brauchen das Einverständnis ihrer Eltern.</p>
