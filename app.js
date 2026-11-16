@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.2 · Build 24 · 2026-11-16 */
+/*! Stagemate v0.4.4 · Build 26 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -1830,6 +1830,8 @@
     $('bandNamePanel').classList.toggle('hidden', !admin);
     $('viewAsPanel').classList.toggle('hidden', !admin);
     $('teamAddPanel').classList.toggle('hidden', !admin);
+    $('slWordsPanel').classList.toggle('hidden', !admin);
+    if (admin) { if (slCfg[currentBand]) renderSlWords(); else slLoadCfg(currentBand).then(renderSlWords); }
     $('tHint').textContent = !admin
       ? (rolesMgr ? 'Mit der Rolle „Organisation“ kannst du festlegen, wer welche Rollen hat, und die verfügbaren Rollen bearbeiten.' : 'Hier siehst du, wer in der Band welche Rolle hat.')
       : isFounder(currentBand)
@@ -2350,11 +2352,13 @@
   function openSetlist() {
     if (slBand !== currentBand) {
       slBand = currentBand; slLists = []; slSongs = [];
+      if (!slCfg[currentBand]) slLoadCfg(currentBand);
       [slUnsubL, slUnsubS].forEach(u => { try { u && u(); } catch (e) {} }); slUnsubL = slUnsubS = null;
       try { slSel = ls.get('slSel_' + currentBand) || null; } catch (e) { slSel = null; }
       const cL = db.collection(`setlists/${currentBand}/lists`), cS = db.collection(`songs/${currentBand}/items`);
-      const aL = snap => { const keep = slPend && slLists.find(x => x.id === slPend); slLists = snap.docs.map(d => (keep && d.id === slPend ? keep : { id: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de')); if (currentPage === 'page6' && !slBusy()) renderSetlist(); };
-      const aS = snap => { slSongs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.title || '').localeCompare(b.title || '', 'de')); if (!$('slLibModal').classList.contains('hidden')) renderSlLib(); };
+      const bandAtStart = currentBand;
+      const aL = snap => { if (slBand !== bandAtStart) return; const keep = slPend && slLists.find(x => x.id === slPend); slLists = snap.docs.map(d => (keep && d.id === slPend ? keep : { id: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de')); if (currentPage === 'page6' && !slBusy()) renderSetlist(); };
+      const aS = snap => { if (slBand !== bandAtStart) return; slSongs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.title || '').localeCompare(b.title || '', 'de')); if (!$('slLibModal').classList.contains('hidden')) renderSlLib(); };
       try { slUnsubL = cL.onSnapshot ? cL.onSnapshot(aL) : null; } catch (e) { slUnsubL = null; }
       if (!slUnsubL) cL.get().then(aL).catch(() => {});
       try { slUnsubS = cS.onSnapshot ? cS.onSnapshot(aS) : null; } catch (e) { slUnsubS = null; }
@@ -2376,6 +2380,46 @@
     const base = hasStart ? h * 60 + (m || 0) : 0; let t = 0, n = 0;
     return { hasStart, rows: (L.items || []).map(it => { const r = { it, at: t, num: it.type === 'song' ? ++n : 0, clock: hasStart ? slClock(base, t) : '' }; t += it.dur || 0; return r; }), total: t, base };
   }
+  // Titel, die in einer Setlist mehrfach vorkommen dürfen (Standard; später pro Band einstellbar)
+  const SL_DUP_DEFAULT = ['intro', 'interlude', 'break', 'outro'];
+  const slCfg = {};   // Band -> Wörter
+  const slWords = () => slCfg[currentBand] || SL_DUP_DEFAULT;
+  async function slLoadCfg(band) {
+    try { const d = await db.doc(`setlists/${band}/settings/config`).get(); slCfg[band] = d.exists && Array.isArray(d.data().dupOk) ? d.data().dupOk : SL_DUP_DEFAULT.slice(); } catch (e) { slCfg[band] = SL_DUP_DEFAULT.slice(); }
+    if (band === currentBand && currentPage === 'page6') renderSetlist();
+  }
+  async function slSaveWords(list) {
+    slCfg[currentBand] = list; renderSlWords();
+    try { await db.doc(`setlists/${currentBand}/settings/config`).set({ dupOk: list, updatedAt: new Date().toISOString() }); } catch (e) { flash('Wörter konnten nicht gespeichert werden', true); }
+  }
+  function renderSlWords() {
+    const box = $('slWords'); if (!box) return; box.innerHTML = '';
+    const list = slWords();
+    if (!list.length) box.appendChild(el('div', 'mnote', 'Keine Wörter – jeder doppelte Titel löst eine Warnung aus.'));
+    list.forEach(w => {
+      const c = el('span', 'chip on sl-word'); c.append(w + ' ');
+      const x = el('button', 'sl-wx', '×'); x.type = 'button'; x.title = 'Entfernen'; x.setAttribute('aria-label', w + ' entfernen');
+      x.addEventListener('click', () => slSaveWords(slWords().filter(y => y !== w)));
+      c.appendChild(x); box.appendChild(c);
+    });
+  }
+  $('slWordAdd').addEventListener('click', () => {
+    const w = $('slWordNew').value.trim().toLowerCase(); if (!w) return;
+    if (!slWords().includes(w)) slSaveWords([...slWords(), w]);
+    $('slWordNew').value = '';
+  });
+  $('slWordNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('slWordAdd').click(); } });
+  $('slWordReset').addEventListener('click', () => slSaveWords(SL_DUP_DEFAULT.slice()));
+  function slDups(L) {
+    const seen = new Map(), out = new Set();
+    (L.items || []).forEach(it => {
+      if (it.type !== 'song') return;
+      const t = (it.title || '').trim().toLowerCase(); if (!t) return;
+      if (slWords().some(w => t.split(/[^a-zäöü0-9]+/).includes(w.toLowerCase()))) return;
+      if (seen.has(t)) { out.add(seen.get(t)); out.add(it.id); } else seen.set(t, it.id);
+    });
+    return out;
+  }
   function renderSetlist() {
     const can = slCan();
     const sel = $('slSelect'); sel.innerHTML = '';
@@ -2396,24 +2440,24 @@
     const T = slTimes(L);
     const sum = $('slSum'); sum.innerHTML = '';
     const nSongs = T.rows.filter(r => r.num).length;
-    sum.append(el('span', null, `${nSongs} ${nSongs === 1 ? 'Song' : 'Songs'} · ${L.items.length} Elemente · Gesamt ${slFmt(T.total)}`));
-    if (T.hasStart && L.items.length) sum.append(el('span', null, `Ende ${slClock(T.base, T.total)}`));
-    if (L.targetMin) {
-      const diff = T.total - L.targetMin * 60, ok = Math.abs(diff) <= 30;
-      const w = el('span', 'sl-tag ' + (ok ? 'ok' : diff > 0 ? 'over' : 'under'), ok ? 'Passt zur Soll-Länge' : diff > 0 ? `${slFmt(diff)} zu lang` : `${slFmt(-diff)} zu kurz`);
-      sum.append(w);
-    }
+    const stat = (k, v, cls) => { const d = el('div', 'sl-stat' + (cls ? ' ' + cls : '')); d.append(el('div', 'sk', k), el('div', 'sv', v)); sum.appendChild(d); };
+    stat(nSongs === 1 ? 'Song' : 'Songs', String(nSongs)); stat('Elemente', String(L.items.length)); stat('Gesamt', slFmt(T.total));
+    if (T.hasStart && L.items.length) stat('Ende', slClock(T.base, T.total));
+    if (L.targetMin) { const diff = T.total - L.targetMin * 60, ok = Math.abs(diff) <= 30; stat('Soll ' + L.targetMin + ' Min.', ok ? 'passt' : diff > 0 ? slFmt(diff) + ' zu lang' : slFmt(-diff) + ' zu kurz', ok ? 'ok' : diff > 0 ? 'over' : 'under'); }
+    const dups = [...new Set([...slDups(L)].map(id => (L.items.find(x => x.id === id) || {}).title))];
+    if (dups.length) stat('Doppelt', '⚠ ' + dups.join(', '), 'over');
     const bar = $('slAddBar'); bar.innerHTML = '';
     Object.entries(SL_TYPES).forEach(([k, v]) => { const b = el('button', 'btn small ghost' + (can ? '' : ' pv-locked'), `${v.icon} ${v.label}`); b.type = 'button'; b.addEventListener('click', () => can ? slOpenItem(-1, k) : slDeny()); bar.appendChild(b); });
     const lb = el('button', 'btn small' + (can ? '' : ' pv-locked'), '+ aus Bibliothek'); lb.type = 'button'; lb.addEventListener('click', () => can ? openSlLib() : slDeny()); bar.appendChild(lb);
     const box = $('slItems'); box.innerHTML = '';
     if (!L.items.length) box.appendChild(el('div', 'mnote', 'Noch leer. Füge oben Songs, Intro, Pausen oder Ansagen hinzu.'));
+    const dupIds = slDups(L);
     T.rows.forEach((r, i) => {
       const it = r.it, ty = SL_TYPES[it.type] || SL_TYPES.song;
-      const row = el('div', 'sl-row sl-t-' + it.type); row.dataset.cid = it.id;
+      const row = el('div', 'sl-row sl-t-' + it.type + (dupIds.has(it.id) ? ' sl-dup' : '')); row.dataset.cid = it.id;
       const grip = el('span', 'sl-grip', '⠿'); grip.title = 'Ziehen zum Verschieben';
-      const main = el('div', 'sl-main'); main.append(el('div', 'sl-title', (it.title || ty.label)));
-      const sub = [it.artist, it.key, it.bpm ? it.bpm + ' BPM' : '', it.note].filter(Boolean).join(' · '); if (sub) main.append(el('div', 'sl-sub', sub));
+      const main = el('div', 'sl-main'); main.append(el('div', 'sl-title', (dupIds.has(it.id) ? '⚠ ' : '') + (it.title || ty.label)));
+      const sub = [it.artist, it.album, it.year || '', it.key, it.bpm ? it.bpm + ' BPM' : '', it.note].filter(Boolean).join(' · '); if (sub) main.append(el('div', 'sl-sub', sub));
       row.append(grip, el('span', 'sl-num', r.num ? String(r.num) : ty.icon), el('span', 'sl-clock', r.clock || slFmt(r.at)), main, el('span', 'sl-dur', slFmt(it.dur)));
       row.addEventListener('click', e => { if (e.target.closest('.sl-grip')) return; can ? slOpenItem(i) : slDeny(); });
       if (can) slDrag(row, grip, box);
@@ -2476,38 +2520,40 @@
     $('slTypeField').classList.toggle('hidden', isLib);
     $('slItemH').textContent = isLib ? (it ? 'Song bearbeiten' : 'Neuer Song') : (it ? 'Element bearbeiten' : SL_TYPES[ty].label + ' hinzufügen');
     $('slTitle').value = it ? (it.title || '') : (ty === 'song' ? '' : SL_TYPES[ty].label);
-    $('slArtist').value = it ? (it.artist || '') : ''; $('slDur').value = slFmt(it ? it.dur : SL_TYPES[ty].dur);
+    $('slArtist').value = it ? (it.artist || '') : ''; $('slAlbum').value = it ? (it.album || '') : ''; $('slYear').value = it && it.year ? it.year : ''; $('slDur').value = slFmt(it ? it.dur : SL_TYPES[ty].dur);
     $('slKey').value = it ? (it.key || '') : ''; $('slBpm').value = it && it.bpm ? it.bpm : ''; $('slNote').value = it ? (it.note || '') : '';
     $('slToLib').checked = false; $('slToLibWrap').classList.toggle('hidden', isLib || ty !== 'song' || !!it);
     $('slItemDel').classList.toggle('hidden', !it); $('slItemMsg').textContent = '';
-    $('slArtistField').classList.toggle('hidden', !isLib && ty !== 'song');
+    $('slArtistField').classList.toggle('hidden', !isLib && ty !== 'song'); $('slAlbumField').classList.toggle('hidden', !isLib && ty !== 'song');
+    if (isLib) $('slLibModal').classList.add('hidden');
     $('slItemModal').classList.remove('hidden'); setTimeout(() => $('slTitle').focus(), 30);
   }
   $('slType').addEventListener('change', () => {
-    const t = $('slType').value; $('slArtistField').classList.toggle('hidden', t !== 'song');
+    const t = $('slType').value; $('slArtistField').classList.toggle('hidden', t !== 'song'); $('slAlbumField').classList.toggle('hidden', t !== 'song');
     if (slCtx && slCtx.isNew) { const olds = Object.values(SL_TYPES).map(x => x.label); if (!$('slTitle').value || olds.includes($('slTitle').value)) $('slTitle').value = t === 'song' ? '' : SL_TYPES[t].label; $('slDur').value = slFmt(SL_TYPES[t].dur); $('slToLibWrap').classList.toggle('hidden', t !== 'song'); }
   });
-  const closeSlItem = () => { $('slItemModal').classList.add('hidden'); slCtx = null; };
+  const closeSlItem = () => { const wasLib = slCtx && slCtx.lib !== null; $('slItemModal').classList.add('hidden'); slCtx = null; if (wasLib) { $('slLibModal').classList.remove('hidden'); renderSlLib(); } };
   ['slItemClose', 'slItemCancel'].forEach(id => $(id).addEventListener('click', closeSlItem));
   $('slItemModal').addEventListener('click', e => { if (e.target === $('slItemModal')) closeSlItem(); });
   $('slItemSave').addEventListener('click', async () => {
     if (!slCtx) return;
     const type = slCtx.lib !== null ? 'song' : $('slType').value;
-    const data = { title: $('slTitle').value.trim(), artist: type === 'song' ? $('slArtist').value.trim() : '', dur: slParse($('slDur').value), key: $('slKey').value.trim(), bpm: Math.max(0, parseInt($('slBpm').value, 10) || 0), note: $('slNote').value.trim() };
+    const data = { title: $('slTitle').value.trim(), artist: type === 'song' ? $('slArtist').value.trim() : '', album: type === 'song' ? $('slAlbum').value.trim() : '', year: type === 'song' ? (parseInt($('slYear').value, 10) || 0) : 0, dur: slParse($('slDur').value), key: $('slKey').value.trim(), bpm: Math.max(0, parseInt($('slBpm').value, 10) || 0), note: $('slNote').value.trim() };
     if (!data.title && type === 'song') { $('slItemMsg').textContent = 'Bitte einen Titel eingeben.'; return; }
     if (!data.title) data.title = SL_TYPES[type].label;
     if (slCtx.lib !== null) {
       const col = db.collection(`songs/${slBand}/items`), ref = slCtx.lib ? col.doc(slCtx.lib) : col.doc();
       try { await ref.set({ ...data, updatedAt: new Date().toISOString() }); } catch (e) { $('slItemMsg').textContent = 'Speichern fehlgeschlagen.'; return; }
-      if (slCtx.lib) { const s = slSongs.find(x => x.id === slCtx.lib); if (s) Object.assign(s, data); } else slSongs.push({ id: ref.id, ...data });
+      if (slCtx.lib) { const s = slSongs.find(x => x.id === slCtx.lib); if (s) Object.assign(s, data); } else if (!slSongs.some(x => x.id === ref.id)) slSongs.push({ id: ref.id, ...data });
       slSongs.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'de')); closeSlItem(); renderSlLib(); return;
     }
     const L = slCur(); if (!L) return;
     if (slCtx.idx >= 0) L.items[slCtx.idx] = { ...L.items[slCtx.idx], type, ...data }; else L.items.push({ id: slId(), type, ...data });
+    slSave(L);
     if (type === 'song' && $('slToLib').checked && !slSongs.some(s => (s.title || '').toLowerCase() === data.title.toLowerCase() && (s.artist || '') === data.artist)) {
-      const ref = db.collection(`songs/${slBand}/items`).doc(); slSongs.push({ id: ref.id, ...data }); ref.set({ ...data, updatedAt: new Date().toISOString() }).catch(() => {});
+      const ref = db.collection(`songs/${slBand}/items`).doc(); if (!slSongs.some(x => x.id === ref.id)) slSongs.push({ id: ref.id, ...data }); ref.set({ ...data, updatedAt: new Date().toISOString() }).catch(() => {});
     }
-    slSave(L); closeSlItem(); renderSetlist();
+    closeSlItem(); renderSetlist();
   });
   $('slItemDel').addEventListener('click', async () => {
     if (!slCtx) return;
@@ -2523,12 +2569,18 @@
     if (!list.length) box.appendChild(el('div', 'mnote', slSongs.length ? 'Kein Treffer.' : 'Noch keine Songs. Mit „+ Neuer Song“ legst du den ersten an.'));
     list.forEach(s => {
       const r = el('div', 'sl-librow'), m = el('div', 'sl-main');
-      m.append(el('div', 'sl-title', s.title || 'Ohne Titel'), el('div', 'sl-sub', [s.artist, slFmt(s.dur), s.key, s.bpm ? s.bpm + ' BPM' : ''].filter(Boolean).join(' · ')));
+      m.append(el('div', 'sl-title', s.title || 'Ohne Titel'), el('div', 'sl-sub', [s.artist, s.album, s.year || '', slFmt(s.dur), s.key, s.bpm ? s.bpm + ' BPM' : ''].filter(Boolean).join(' · ')));
       const add = el('button', 'btn small' + (L ? '' : ' hidden'), '+'); add.type = 'button'; add.title = 'An die Setlist anhängen';
-      add.addEventListener('click', () => { if (!can) return slDeny(); const LL = slCur(); if (!LL) return; LL.items.push({ id: slId(), type: 'song', title: s.title, artist: s.artist || '', dur: s.dur || 0, key: s.key || '', bpm: s.bpm || 0, note: s.note || '' }); slSave(LL); renderSetlist(); flash('„' + (s.title || 'Song') + '“ hinzugefügt'); });
-      const ed = el('button', 'btn small ghost', '✎'); ed.type = 'button'; ed.title = 'Song bearbeiten';
+      add.addEventListener('click', () => { if (!can) return slDeny(); const LL = slCur(); if (!LL) return; LL.items.push({ id: slId(), type: 'song', title: s.title, artist: s.artist || '', album: s.album || '', year: s.year || 0, dur: s.dur || 0, key: s.key || '', bpm: s.bpm || 0, note: s.note || '' }); slSave(LL); renderSetlist(); flash('„' + (s.title || 'Song') + '“ hinzugefügt'); });
+      const ed = el('button', 'btn small ghost', '✎ Bearbeiten'); ed.type = 'button'; ed.title = 'Song bearbeiten';
       ed.addEventListener('click', () => can ? slOpenItem(-1, 'song', { id: s.id }) : slDeny());
-      r.append(m, add, ed); box.appendChild(r);
+      const del = el('button', 'btn small ghost sl-del', '🗑'); del.type = 'button'; del.title = 'Song löschen';
+      del.addEventListener('click', async () => {
+        if (!can) return slDeny(); if (!confirm('„' + (s.title || 'Song') + '“ aus der Bibliothek löschen? Setlists behalten ihre Einträge.')) return;
+        slSongs = slSongs.filter(x => x.id !== s.id); renderSlLib();
+        try { await db.collection(`songs/${slBand}/items`).doc(s.id).delete(); } catch (e) { flash('Löschen fehlgeschlagen', true); }
+      });
+      r.append(m, add, ed, del); box.appendChild(r);
     });
   }
   $('slLibBtn').addEventListener('click', openSlLib);
@@ -2544,8 +2596,8 @@
     if (kind === 'json') { txt = JSON.stringify({ name: L.name, gig: gig ? gig.title : '', start: L.start || '', targetMin: L.targetMin || 0, items: L.items }, null, 2); mime = 'application/json'; }
     else if (kind === 'csv') {
       const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-      txt = '﻿' + ['Nr', 'Uhrzeit', 'Art', 'Titel', 'Interpret', 'Länge', 'Tonart', 'BPM', 'Notiz'].map(q).join(';') + '\r\n' +
-        T.rows.map(r => [r.num || '', r.clock, SL_TYPES[r.it.type].label, r.it.title, r.it.artist, slFmt(r.it.dur), r.it.key, r.it.bpm || '', r.it.note].map(q).join(';')).join('\r\n'); mime = 'text/csv';
+      txt = '﻿' + ['Nr', 'Uhrzeit', 'Art', 'Titel', 'Interpret', 'Album', 'Jahr', 'Länge', 'Tonart', 'BPM', 'Notiz'].map(q).join(';') + '\r\n' +
+        T.rows.map(r => [r.num || '', r.clock, SL_TYPES[r.it.type].label, r.it.title, r.it.artist, r.it.album, r.it.year || '', slFmt(r.it.dur), r.it.key, r.it.bpm || '', r.it.note].map(q).join(';')).join('\r\n'); mime = 'text/csv';
     } else {
       txt = [L.name || 'Setlist', gig ? `Gig: ${gig.title || ''}${gig.date ? ' (' + fmtDateOv(parseKey(gig.date), ovCfg().date) + ')' : ''}` : '', `Gesamt: ${slFmt(T.total)}`, ''].filter((x, i) => x || i === 3).join('\r\n') + '\r\n' +
         T.rows.map(r => `${r.num ? String(r.num).padStart(2) + '.' : ' · '} ${r.clock ? r.clock + '  ' : ''}${r.it.title || SL_TYPES[r.it.type].label}${r.it.artist ? ' – ' + r.it.artist : ''}  (${slFmt(r.it.dur)})${r.it.key ? '  [' + r.it.key + ']' : ''}${r.it.note ? '  ' + r.it.note : ''}`).join('\r\n'); mime = 'text/plain';

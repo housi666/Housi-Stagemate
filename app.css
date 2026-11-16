@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.2 · Build 24 · 2026-11-16 */
+/*! Stagemate v0.4.4 · Build 26 · 2026-11-16 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1556,3 +1556,19 @@
   .sl-wrap .field input, .sl-wrap .field select, .sl-toolbar select, #slLibFilter { width: 100%; padding: 10px 12px; font-size: 14px; font-family: inherit; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); }
   .sl-toolbar select { width: auto; }
   #slLibFilter { flex: 1; min-width: 0; }
+  .sl-wrap .btn.ghost { border: 1px solid var(--border); }
+  .sl-wrap .btn.ghost:hover { border-color: var(--accent); }
+  .sl-sum { gap: 8px; }
+  .sl-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 14px; min-width: 76px; }
+  .sl-stat .sk { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .sl-stat .sv { font-size: 17px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+  .sl-stat.ok { border-color: #15803d; } .sl-stat.ok .sv { color: #15803d; }
+  .sl-stat.over { border-color: #b91c1c; } .sl-stat.over .sv { color: #b91c1c; font-size: 14px; }
+  .sl-stat.under { border-color: #b45309; } .sl-stat.under .sv { color: #b45309; }
+  .sl-row.sl-dup { border-color: #b91c1c; background: rgba(185,28,28,.06); }
+  .sl-librow .btn { flex: none; }
+  .sl-word { display: inline-flex; align-items: center; gap: 4px; }
+  .sl-wx { border: none; background: transparent; color: inherit; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; opacity: .7; }
+  .sl-wx:hover { opacity: 1; }
+  #slWords { margin-bottom: 10px; }
+  .chip.sl-word::before { content: none; }

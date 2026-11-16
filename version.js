@@ -1,16 +1,26 @@
-/*! Stagemate v0.4.2 · Build 24 · 2026-11-16 */
+/*! Stagemate v0.4.4 · Build 26 · 2026-11-16 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.2';
-const APP_BUILD = 24;
+const APP_VERSION = 'v0.4.4';
+const APP_BUILD = 26;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.4', date: '2026-11-16', items: [
+    { type: 'neu', text: 'Bandverwaltung: Wörter einstellen, die in der Setlist doppelt vorkommen dürfen (hinzufügen, entfernen, Standard wiederherstellen)' },
+  ] },
+  { version: 'v0.4.3', date: '2026-11-16', items: [
+    { type: 'neu', text: 'Setlist: Warnung, wenn derselbe Titel doppelt vorkommt (Intro, Interlude, Break, Outro ausgenommen)' },
+    { type: 'neu', text: 'Song-Bibliothek: Löschen und Bearbeiten als Knöpfe; neue Felder Album und Jahr' },
+    { type: 'neu', text: 'Band gründen: Hinweis, dass sich auch Solo-Künstler als Band anmelden müssen' },
+    { type: 'besser', text: 'Setlist: Zusammenfassung als einzelne Anzeigen, Export-Knöpfe mit Rahmen' },
+    { type: 'fix', text: 'Song-Bibliothek schliesst sich beim Bearbeiten eines Songs (keine Überlappung mehr); es werden nur Songs der aktuellen Band gezeigt' },
+  ] },
   { version: 'v0.4.2', date: '2026-11-16', items: [
     { type: 'neu', text: 'Setlist: mehrere Setlists pro Band, Songs, Intro, Outro, Zwischenteil, Pause und Ansage, per Griff verschiebbar' },
     { type: 'neu', text: 'Setlist: Gesamtdauer, Uhrzeit pro Element (ab Beginn), Soll-Länge mit Warnung, Gig zuweisen, duplizieren' },

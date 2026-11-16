@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.2 · Build 24 · 2026-11-16 */
+/*! Stagemate v0.4.4 · Build 26 · 2026-11-16 */
 /* Stagemate – Datenschicht
  * ------------------------------------------------------------
  * Die einzige Stelle, die weiss, WO die Daten liegen.
