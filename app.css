@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.0 · Build 22 · 2026-11-16 */
+/*! Stagemate v0.4.1 · Build 23 · 2026-11-16 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1511,3 +1511,13 @@
   .ov-card:hover .ov-grip { opacity: 1; }
   .rank-head { margin: 14px 2px 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
   .rank-head:first-of-type { margin-top: 4px; }
+
+  /* v0.4.0: Anzeigen in 2 Stufen zuklappbar, Schweben beim Greifen */
+  .hub-head { display: flex; align-items: center; }
+  .hub-fold { margin-left: auto; background: transparent; border: 1px solid var(--border); border-radius: 8px; width: 28px; height: 28px; cursor: pointer; color: var(--muted); font-size: 14px; line-height: 1; padding: 0; }
+  .hub-fold:hover { color: var(--text); border-color: var(--accent); }
+  .hub-sec.fold1 .hub-body { max-height: 120px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+  .hub-sec.fold2 .hub-body { display: none; }
+  .hub-sec.dragging { animation: hubFloat 1.3s ease-in-out infinite; transform-origin: center; }
+  @keyframes hubFloat { 0%, 100% { translate: 0 0; rotate: -.4deg; } 50% { translate: 0 -5px; rotate: .4deg; } }
+  @media (prefers-reduced-motion: reduce) { .hub-sec.dragging { animation: none; } }

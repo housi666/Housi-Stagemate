@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.0 · Build 22 · 2026-11-16 */
+/*! Stagemate v0.4.1 · Build 23 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -1151,7 +1151,9 @@
       HUB_DEFAULT.forEach((k, i) => { if (!hubOrder.includes(k)) hubOrder.splice(Math.min(i, hubOrder.length), 0, k); });
     }
   } catch (e) {}
-  const saveHubLayout = () => { try { ls.set('hubLayout', JSON.stringify({ order: hubOrder })); } catch (e) {} };
+  let hubFold = {};   // Zuklapp-Stufe je Anzeige: 0 offen, 1 halb, 2 eine Zeile
+  try { const sv2 = JSON.parse(ls.get('hubLayout') || 'null'); if (sv2 && sv2.fold && typeof sv2.fold === 'object') hubFold = sv2.fold; } catch (e) {}
+  const saveHubLayout = () => { try { ls.set('hubLayout', JSON.stringify({ order: hubOrder, fold: hubFold })); } catch (e) {} };
   const hubSecs = () => [...$('hubGrid').querySelectorAll(':scope > .hub-sec')];
   // FLIP-Animation: Positionen vorher merken, ändern, dann sanft an den neuen Platz gleiten
   function hubAnimate(change, skip) {
@@ -1195,7 +1197,18 @@
     const head = el('div', 'hub-head');
     const drag = el('span', 'hub-drag', '⠿'); drag.title = 'Anzeige verschieben (ziehen)'; drag.setAttribute('aria-label', 'Anzeige verschieben');
     const title = el('span', 'hub-title'); title.append(...old.childNodes);
-    head.append(drag, title); old.replaceWith(head);
+    const fold = el('button', 'hub-fold'); fold.type = 'button';
+    const FOLD_T = ['Zuklappen (halb)', 'Weiter zuklappen (eine Zeile)', 'Wieder aufklappen'];
+    const setFold = n => {
+      sec.classList.remove('fold1', 'fold2'); if (n) sec.classList.add('fold' + n);
+      fold.textContent = n === 2 ? '▸' : '▾'; fold.title = FOLD_T[n]; fold.setAttribute('aria-label', FOLD_T[n]);
+    };
+    setFold(hubFold[sec.dataset.hub] || 0);
+    fold.addEventListener('click', () => {
+      const n = ((hubFold[sec.dataset.hub] || 0) + 1) % 3; hubFold[sec.dataset.hub] = n;
+      hubAnimate(() => { setFold(n); packHub(); }, sec); saveHubLayout();
+    });
+    head.append(drag, title, fold); old.replaceWith(head);
     sec.classList.remove('folded', 'wide');
     drag.addEventListener('pointerdown', e => startHubDrag(e, sec));
   });

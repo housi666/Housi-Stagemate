@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.0 · Build 22 · 2026-11-16 */
+/*! Stagemate v0.4.1 · Build 23 · 2026-11-16 */
 /* Stagemate – Nutzungsbedingungen und Datenschutzerklärung
  * Vorlage, keine Rechtsberatung. Bei Änderungen LEGAL_VERSION anpassen:
  * dann müssen alle Benutzer die neue Fassung erneut akzeptieren.
