@@ -1,16 +1,24 @@
-/*! Stagemate v0.3.5 · Build 20 · 2026-11-16 */
+/*! Stagemate v0.3.6 · Build 21 · 2026-11-16 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.3.5';
-const APP_BUILD = 20;
+const APP_VERSION = 'v0.3.6';
+const APP_BUILD = 21;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.3.6', date: '2026-11-16', items: [
+    { type: 'neu', text: 'Persönliche Übersicht: Anzeige „Schnell erstellen“ (Gig, Termin, Checkliste; Setlist folgt)' },
+    { type: 'neu', text: 'Changelog-Knopf neben Nutzungsbedingungen und Datenschutz: ganzer Changelog, verschachtelt nach Version' },
+    { type: 'besser', text: 'Persönliche Übersicht: Anzeigen werden immer nach oben zusammengeschoben' },
+    { type: 'besser', text: 'Alle klickbaren Texte sind jetzt Knöpfe (u. a. Alle auf-/zuklappen, CSV exportieren)' },
+    { type: 'besser', text: 'Bandseite → Übersicht: Mitgliederliste halbe Breite, höchstens 5 sichtbar, dann scrollen' },
+    { type: 'besser', text: 'Entwickler-Knopf etwas grösser und gelb' },
+  ] },
   { version: 'v0.3.5', date: '2026-11-16', items: [
     { type: 'neu', text: 'Persönliche Übersicht: neue Anzeige „Dein nächster Gig“ (aus allen Bands, mit Countdown, Ort und Zeitplan)' },
     { type: 'besser', text: 'Alle Anzeigen je ein Drittel breit; Verschieben ist animiert; Umschalter für die Breite und Zähler entfernt' },

@@ -1,4 +1,4 @@
-/*! Stagemate v0.3.5 · Build 20 · 2026-11-16 */
+/*! Stagemate v0.3.6 · Build 21 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -782,6 +782,50 @@
     if (b) { e.preventDefault(); e.stopPropagation(); openLegal(b.dataset.legal); }
   }, true);
   $('legalClose').addEventListener('click', () => $('legalModal').classList.add('hidden'));
+
+  // ================= Changelog (verschachtelt: 0 → 0.3 → v0.3.5) =================
+  const CL_TYPES = { neu: 'Neu', besser: 'Besser', fix: 'Fix', intern: 'Intern' };
+  function openChangelog() {
+    const body = $('clogBody'); body.innerHTML = '';
+    const list = (typeof APP_CHANGELOG !== 'undefined' ? APP_CHANGELOG : []);
+    const groups = {};
+    list.forEach(v => {
+      const [ma, mi] = v.version.replace(/^v/, '').split('.');
+      ((groups[ma] = groups[ma] || {})[ma + '.' + mi] = groups[ma][ma + '.' + mi] || []).push(v);
+    });
+    const first = list[0] && list[0].version;
+    const fold = (cls, title, sub, open) => { const d = el('details', 'clog-' + cls); d.open = !!open; const sm = el('summary'); sm.append(el('span', 'clog-t', title)); if (sub) sm.append(el('span', 'clog-sub', sub)); d.append(sm); return d; };
+    Object.keys(groups).sort((a, b) => b - a).forEach((ma, i) => {
+      const dm = fold('major', `Version ${ma}`, Object.values(groups[ma]).reduce((n, x) => n + x.length, 0) + ' Versionen', i === 0);
+      Object.keys(groups[ma]).sort((a, b) => Number(b.split('.')[1]) - Number(a.split('.')[1])).forEach((mi, j) => {
+        const vs = groups[ma][mi];
+        const dmi = fold('minor', `Version ${mi}`, vs.length + (vs.length === 1 ? ' Version' : ' Versionen'), i === 0 && j === 0);
+        vs.forEach(v => {
+          const dv = fold('ver', v.version, v.date ? v.date.split('-').reverse().join('.') : '–', v.version === first);
+          const ul = el('ul', 'clog-items');
+          (v.items || []).forEach(it => { const li = el('li'); li.append(el('span', 'clog-type ' + it.type, CL_TYPES[it.type] || it.type), el('span', null, it.text)); ul.append(li); });
+          dv.append(ul); dmi.append(dv);
+        });
+        dm.append(dmi);
+      });
+      body.append(dm);
+    });
+    if (!list.length) body.append(el('div', 'mnote', 'Kein Changelog vorhanden.'));
+    $('clogModal').classList.remove('hidden');
+  }
+  // Neben jedem Datenschutz-Knopf einen Changelog-Knopf (ausser im Satz zum Akzeptieren)
+  document.querySelectorAll('[data-legal="privacy"]').forEach(b => {
+    if (b.closest('label, .terms-row, .check')) return;
+    const c = el('button', b.className, (b.textContent.includes('🔒') ? '📝 ' : '') + 'Changelog'); c.type = 'button'; c.dataset.changelog = '1';
+    b.after(c);
+    const prev = b.previousSibling;
+    if (prev && prev.nodeType === 3 && prev.textContent.includes('·')) b.after(document.createTextNode(' · '));
+  });
+  document.addEventListener('click', e => { if (e.target.closest('[data-changelog]')) { e.preventDefault(); openChangelog(); } });
+  $('clogClose').addEventListener('click', () => $('clogModal').classList.add('hidden'));
+  $('clogModal').addEventListener('click', e => { if (e.target === $('clogModal')) $('clogModal').classList.add('hidden'); });
+  $('clogOpenAll').addEventListener('click', () => $('clogBody').querySelectorAll('details').forEach(d => { d.open = true; }));
+  $('clogCloseAll').addEventListener('click', () => $('clogBody').querySelectorAll('details').forEach(d => { d.open = false; }));
   $('legalModal').addEventListener('click', e => { if (e.target === $('legalModal')) $('legalModal').classList.add('hidden'); });
 
   // ================= Passwort ansehen (nur solange gedrückt) =================
@@ -1058,7 +1102,7 @@
     placeUI(page === 'home' ? 'hub' : page);
     navRecord(page);
     $('page-home').classList.toggle('hidden', page !== 'home');
-    if (page === 'home') { renderHub(); if (!isSettingsDirty()) setDraft = null; renderSettingsAll(); }
+    if (page === 'home') { renderHub(); if (!isSettingsDirty()) setDraft = null; renderSettingsAll(); requestAnimationFrame(packHub); }
     document.querySelectorAll('.sidebar [data-page]').forEach(b => b.classList.toggle('active', b.dataset.page === page));
     $('pageTitle').textContent = PAGE_TITLES[page];
     $('roBadge').classList.toggle('hidden', !(reg && levelFor(currentBand, page) === 'read'));
@@ -1097,7 +1141,7 @@
     }
   }
   // ----- Persönliche Übersicht: Anzeigen (Widgets), je ein Drittel breit, verschiebbar (animiert) -----
-  const HUB_DEFAULT = ['bands', 'nextgig', 'agenda', 'tasks', 'profile', 'settings'];
+  const HUB_DEFAULT = ['bands', 'quick', 'nextgig', 'agenda', 'tasks', 'profile', 'settings'];
   let hubOrder = HUB_DEFAULT.slice();
   try {
     const sv = JSON.parse(ls.get('hubLayout') || 'null');
@@ -1126,7 +1170,26 @@
     const grid = $('hubGrid'), map = {};
     hubSecs().forEach(sec => { map[sec.dataset.hub] = sec; });
     hubOrder.forEach(k => { if (map[k]) grid.append(map[k]); });
+    packHub();
   }
+  // Anzeigen immer nach oben zusammenschieben: jede Anzeige kommt in die gerade kürzeste Spalte
+  const HUB_GAP = 14;
+  function packHub() {
+    const grid = $('hubGrid'); if (!grid || !grid.offsetParent) return;
+    const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length || 1;
+    const h = new Array(cols).fill(0);
+    hubSecs().forEach(sec => {
+      const span = Math.ceil(sec.getBoundingClientRect().height) + HUB_GAP;
+      let c = 0; for (let i = 1; i < cols; i++) if (h[i] < h[c] - 1) c = i;
+      sec.style.gridColumn = String(c + 1);
+      sec.style.gridRow = `${h[c] + 1} / span ${span}`;
+      h[c] += span;
+    });
+  }
+  let packT = null;
+  const schedulePack = () => { cancelAnimationFrame(packT); packT = requestAnimationFrame(packHub); };
+  if (window.ResizeObserver) { const ro = new ResizeObserver(schedulePack); hubSecs().forEach(sec => ro.observe(sec)); }
+  window.addEventListener('resize', schedulePack);
   hubSecs().forEach(sec => {
     const old = sec.querySelector('.hub-head');
     const head = el('div', 'hub-head');
@@ -1153,12 +1216,11 @@
       const tgt = under && under.closest('.hub-sec');
       if (!tgt || tgt === sec || tgt.parentElement !== grid) return;
       const r = tgt.getBoundingClientRect();
-      const sameRow = Math.abs(r.top - sec.getBoundingClientRect().top) < 20;
-      const before = sameRow ? ev.clientX < r.left + r.width / 2 : ev.clientY < r.top + r.height / 2;
+      const before = ev.clientY < r.top + r.height / 2;
       const ref = before ? tgt : tgt.nextSibling;
       if (ref === sec || ref === sec.nextSibling) return;
       busy = Date.now();
-      hubAnimate(() => grid.insertBefore(sec, ref));
+      hubAnimate(() => { grid.insertBefore(sec, ref); packHub(); });
     };
     const up = () => {
       document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up);
@@ -1223,6 +1285,34 @@
       res.append(row);
     });
   }
+
+  // ---- Persönliche Übersicht: Schnell erstellen (Band wählen, dann das passende Fenster öffnen)
+  const QUICK = { gig: { page: 'page3', btn: 'gigAdd', label: 'Gig erstellen' }, event: { page: 'page2', btn: 'calAdd', label: 'Termin erstellen' }, checklist: { page: 'page4', btn: 'clpAdd', label: 'Checkliste erstellen' } };
+  function quickGo(kind, bandId) {
+    const q = QUICK[kind]; $('quickModal').classList.add('hidden');
+    currentPage = q.page; enterApp(bandId);
+    setTimeout(() => { const b = $(q.btn); if (b) b.click(); }, 450);
+  }
+  document.querySelectorAll('[data-quick]').forEach(b => b.addEventListener('click', () => {
+    const kind = b.dataset.quick;
+    if (kind === 'setlist') return flash('Die Setlist ist noch im Bau – bald kannst du hier eine Setlist erstellen.', true);
+    const ids = bandIdsOf(profile);
+    if (!ids.length) return flash('Tritt zuerst einer Band bei oder gründe eine.', true);
+    if (ids.length === 1) return quickGo(kind, ids[0]);
+    $('quickTitle').textContent = QUICK[kind].label + ': für welche Band?';
+    const box = $('quickBands'); box.innerHTML = '';
+    ids.forEach(id => {
+      const bd = bands[id]; if (!bd) return;
+      const o = el('button', 'quick-band'); o.type = 'button';
+      const nm = el('span'); nm.append(bd.name); if (bd.tag && showOf(bd).tag) nm.append(tagChip(bd.tag));
+      o.append(nm, el('span', 'qb-go', '›'));
+      o.addEventListener('click', () => quickGo(kind, id));
+      box.append(o);
+    });
+    $('quickModal').classList.remove('hidden');
+  }));
+  $('quickClose').addEventListener('click', () => $('quickModal').classList.add('hidden'));
+  $('quickModal').addEventListener('click', e => { if (e.target === $('quickModal')) $('quickModal').classList.add('hidden'); });
 
   // ---- Persönliche Übersicht: dein nächster Gig (aus allen Bands, bis 1 Jahr voraus)
   function renderNextGig(x, bandLabel) {
@@ -5496,7 +5586,8 @@
       home: [
         T('🏠', 'Persönliche Übersicht', 'Hier landest du nach dem Anmelden. Sie gehört nur dir: keine Seitenleiste, keine Band. Oben die Kopfzeile mit Uhr, Tipps, Support und Abmelden.'),
         T('🎸', 'Band öffnen', 'Die Bandseite öffnest du nur hier: Klick auf eine Band unter „Deine Bands“. Die zuletzt geöffnete steht zuoberst.'),
-        T('🧩', 'Anzeigen verschieben', 'Jede Anzeige (Bands, nächster Gig, Termine, Checklisten-Punkte, Profil, Einstellungen) hat links oben einen Griff ⠿. Packen und an einen anderen Platz ziehen – die anderen rücken sanft nach. Die Anordnung bleibt in diesem Browser gespeichert; „Anordnung zurücksetzen“ stellt die Grundaufteilung wieder her.'),
+        T('🧩', 'Anzeigen verschieben', 'Jede Anzeige (Bands, nächster Gig, Termine, Checklisten-Punkte, Profil, Einstellungen) hat links oben einen Griff ⠿. Packen und an einen anderen Platz ziehen – die anderen rücken sanft nach, Lücken werden automatisch nach oben geschlossen. Die Anordnung bleibt in diesem Browser gespeichert; „Anordnung zurücksetzen“ stellt die Grundaufteilung wieder her.'),
+        T('⚡', 'Schnell erstellen', 'Gig, Termin oder Checkliste direkt von hier erstellen: Band wählen (bei mehreren Bands), dann öffnet sich das passende Fenster in der Band. Die Setlist folgt.'),
         T('🎤', 'Dein nächster Gig', 'Zeigt den nächsten Gig aus allen deinen Bands (bis ein Jahr voraus) mit Countdown, Ort und Zeitplan. „Gig öffnen“ springt direkt zum Gig in der Band.'),
         T('📅', 'Deine Termine', '„Deine nächsten Termine“ zeigt Gigs und Termine aller deiner Bands der nächsten 60 Tage. Ein Klick öffnet den Termin in der Band.'),
         T('☑️', 'Deine Checklisten-Punkte', 'Alle offenen Punkte, die du in irgendeiner Band übernommen hast – mit Band, was und wann.'),
@@ -5564,6 +5655,7 @@
       { icon: '🙈', title: 'Profilbild verbergen', text: 'Unter Einstellungen → Sichtbarkeit „Profilbild für andere sichtbar“ ausschalten. Andere sehen dann nur noch ein verschwommenes Bild mit Schloss.' },
       { icon: '🚧', title: 'Finanzen', text: 'Die Finanzen befinden sich im Bau. Du kannst dich umsehen, die Funktionen sind aber noch gesperrt.' },
       { icon: '🏠', title: 'Ablauf', text: 'Anmelden → persönliche Übersicht → Band wählen → Bandseite. Über „Zurück zum Startbildschirm“ kommst du wieder auf die Übersicht.' },
+      { icon: '📝', title: 'Changelog', text: 'Neben „Nutzungsbedingungen“ und „Datenschutz“ öffnet „Changelog“ alle Änderungen – verschachtelt nach Version (0 → 0.3 → v0.3.6), jede Version einzeln aufklappbar.' },
       { icon: '👁', title: 'Passwort ansehen', text: 'Das Auge im Passwortfeld gedrückt halten – solange du drückst, siehst du das Passwort im Klartext.' },
       { icon: '🔐', title: 'Konto', text: 'Web-Version: Auf der persönlichen Übersicht unter „Profil“ → „Konto“ änderst du dein Passwort oder löschst dein Konto. Gründer/Admins lösen vorher ihre Band auf.' },
       { icon: '📜', title: 'Nutzungsbedingungen & Datenschutz', text: 'Findest du im Profil, in den Einstellungen, auf der Anmeldeseite und im Support-Fenster. Bei einer neuen Fassung musst du sie beim nächsten Anmelden erneut akzeptieren.' },
