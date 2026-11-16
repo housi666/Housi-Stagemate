@@ -1,16 +1,21 @@
-/*! Stagemate v0.4.8 · Build 30 · 2026-11-16 */
+/*! Stagemate v0.4.9 · Build 31 · 2026-11-16 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.8';
-const APP_BUILD = 30;
+const APP_VERSION = 'v0.4.9';
+const APP_BUILD = 31;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.9', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Kalender: Klick auf einen Gig öffnet die Gig-Seite mit aufgeklapptem Gig (kein Termin-Fenster mehr für Gigs)' },
+    { type: 'neu', text: 'Termin erstellen: Kategorie „Gig“ nicht mehr wählbar; stattdessen gelber Knopf „Zur Gig-Seite“, danach leuchtet „Gig erstellen“ dreimal' },
+    { type: 'neu', text: 'Gig: Verpflegung mit wählbarer Uhrzeit' },
+  ] },
   { version: 'v0.4.8', date: '2026-11-17', items: [
     { type: 'neu', text: 'Gigs: Knopf „Zur Setlist“ springt zur verknüpften Setlist; ohne Verknüpfung oben rote Meldung „Noch keine Setlist verknüpft“ und blauer Hinweis' },
     { type: 'neu', text: 'Timetable-Eintrag: Bandname und Startzeit sind Pflicht; optional Ende oder Spieldauer, Anzahl Songs, Setlist-Verknüpfung (Sprung zur Setlist)' },

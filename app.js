@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.8 · Build 30 · 2026-11-16 */
+/*! Stagemate v0.4.9 · Build 31 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -4275,7 +4275,17 @@
   }
   let evEditing = null;       // { ev?, occ? }
   let evWeekdays = new Set();
+  function gigFlash() { const b = $('gigAdd'); b.classList.remove('flash3'); void b.offsetWidth; b.classList.add('flash3'); setTimeout(() => b.classList.remove('flash3'), 2400); }
   function openEventModal(opts) {
+    // Gigs werden nur auf der Gig-Seite bearbeitet: aus dem Kalender dorthin springen
+    if (opts.ev && opts.ev.category === 'auftritt' && opts.ev.kind !== 'checklist' && !opts.gigOnly && !opts.checklist) {
+      const d0 = opts.occ ? dOnly(opts.occ) : parseKey(opts.ev.date);
+      gigsOpen.add(opts.ev.id + '|' + dKey(d0));
+      if (levelFor(currentBand, 'page3') === 'hidden') return previewBlocked(null, 'Keine Berechtigung: Die Registerkarte „Gigs“ ist für dich ausgeblendet. Bitte den Admin um Zugriff.');
+      showPage('page3');
+      setTimeout(() => { const c = document.querySelector(`.gig[data-key="${opts.ev.id}|${dKey(d0)}"]`); if (c) c.scrollIntoView({ block: 'center' }); }, 80);
+      return;
+    }
     evEditing = opts;
     const ev = opts.ev || null;
     const isGigEv = !!(ev && ev.category === 'auftritt');
@@ -4288,7 +4298,7 @@
     $('evModalTitle').textContent = gigOnly ? (ev ? (editable ? 'Gig bearbeiten' : 'Gig') : 'Gig erstellen') : (ev ? (editable ? 'Termin bearbeiten' : 'Termin') : 'Neuer Termin');
     // Kategorien
     const sel = $('evCat'); sel.innerHTML = '';
-    ((bands[currentBand] && bands[currentBand].cfg.categories) || DEFAULT_CATEGORIES).forEach(c => { const o = el('option', null, c.name); o.value = c.id; sel.appendChild(o); });
+    ((bands[currentBand] && bands[currentBand].cfg.categories) || DEFAULT_CATEGORIES).filter(c => c.id !== 'auftritt' || gigOnly || isGigEv).forEach(c => { const o = el('option', null, c.name); o.value = c.id; sel.appendChild(o); });
     const date = ev ? parseKey(ev.date) : dOnly(opts.date || calSel);
     $('evTitle').value = ev ? ev.title || '' : '';
     $('evDate').value = dKey(date);
@@ -4303,7 +4313,7 @@
     $('evMaps').value = ev ? ev.mapsUrl || '' : '';
     const sc = (ev && ev.schedule) || {};
     $('evGetIn').value = sc.getin || ''; $('evAufbau').value = sc.aufbau || ''; $('evSoundcheck').value = sc.soundcheck || ''; $('evLinecheck').value = sc.linecheck || '';
-    $('evCatering').value = ev ? ev.catering || '' : '';
+    $('evCatering').value = ev ? ev.catering || '' : ''; $('evCateringTime').value = ev ? ev.cateringTime || '' : '';
     $('evChecklist').checked = !!(ev && ev.checklist) || (!ev && !!opts.checklist);
     evLinkList = ev && Array.isArray(ev.links) ? ev.links.slice() : [];
     evContactList = ev && Array.isArray(ev.contacts) ? ev.contacts.map(c => ({ ...c })) : [];
@@ -4311,6 +4321,7 @@
     renderLinkInputs(editable);
     evDocList = ev && Array.isArray(ev.docs) ? ev.docs.slice() : []; evDocNew = []; evDocRemoved = [];
     setMsg($('evDocMsg'), ''); renderDocInputs(editable);
+    $('evToGig').classList.toggle('hidden', gigOnly || !!ev || !!opts.checklist);
     sel.value = gigOnly ? 'auftritt' : (ev && ev.category ? ev.category : (opts.category || (sel.options[0] ? sel.options[0].value : '')));
     paintCatDot();
     updateGigFields();
@@ -4330,7 +4341,7 @@
     $('evCatLock').classList.toggle('hidden', !gigOnly);
     // Abschnitte: wichtige offen, leere zu
     $('secTime').open = true; $('secPlace').open = true;
-    $('secCatering').open = !!$('evCatering').value; $('secLinks').open = evLinkList.length > 0; $('secContact').open = evContactList.length > 0;
+    $('secCatering').open = !!$('evCatering').value || !!$('evCateringTime').value; $('secLinks').open = evLinkList.length > 0; $('secContact').open = evContactList.length > 0;
     $('secDocs').open = evDocList.length > 0;
     $('secNotes').open = !!$('evNotes').value; $('secRepeat').open = $('evFreq').value !== 'none';
     updateSecSums();
@@ -4504,7 +4515,7 @@
       : ($('evAllDay').checked ? 'Ganztägig' : [$('evStart').value, $('evEnd').value].filter(Boolean).join('–'));
     $('secTimeSum').textContent = $('evAllDay').checked ? 'Ganztägig' : times;
     $('secPlaceSum').textContent = $('evLocation').value.trim();
-    $('secCateringSum').textContent = $('evCatering').value.trim() ? '✓' : '';
+    $('secCateringSum').textContent = $('evCatering').value.trim() || $('evCateringTime').value ? '✓' : '';
     const n = evLinkList.filter(x => (x || '').trim()).length;
     $('secLinksSum').textContent = n ? `${n} Link${n > 1 ? 's' : ''}` : '';
     const nc = evContactList.filter(c => (c.name || c.phone || c.email || '').trim()).length;
@@ -4550,6 +4561,11 @@
   $('evAllDay').addEventListener('change', () => { $('evTimes').classList.toggle('hidden', $('evAllDay').checked); });
   $('evCancel').addEventListener('click', () => closeEventModal());
   $('evClose').addEventListener('click', closeEventModal);
+  $('evToGig').addEventListener('click', () => {
+    closeEventModal();
+    if (levelFor(currentBand, 'page3') === 'hidden') return previewBlocked(null, 'Keine Berechtigung: Die Registerkarte „Gigs“ ist für dich ausgeblendet. Bitte den Admin um Zugriff.');
+    showPage('page3'); setTimeout(gigFlash, 150);
+  });
   $('evModal').addEventListener('click', e => { if (e.target === $('evModal')) closeEventModal(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('evModal').classList.contains('hidden')) closeEventModal(); });
 
@@ -4583,7 +4599,7 @@
       parking: $('evCat').value === 'auftritt' || (evEditing && evEditing.gigOnly) ? $('evParking').value.trim() : (ev && ev.parking) || '',
       mapsUrl: $('evCat').value === 'auftritt' || (evEditing && evEditing.gigOnly) ? normUrl($('evMaps').value) : (ev && ev.mapsUrl) || '',
       schedule: { getin: $('evGetIn').value, aufbau: $('evAufbau').value, soundcheck: $('evSoundcheck').value, linecheck: $('evLinecheck').value },
-      catering: $('evCatering').value.trim(),
+      catering: $('evCatering').value.trim(), cateringTime: /^\d\d:\d\d$/.test($('evCateringTime').value) ? $('evCateringTime').value : '',
       links: evLinkList.map(normUrl).filter(Boolean),
       contacts: $('evCat').value === 'auftritt' || (evEditing && evEditing.gigOnly) ? evContactList.map(c => ({ name: (c.name || '').trim(), role: (c.role || '').trim(), phone: (c.phone || '').trim(), email: (c.email || '').trim() })).filter(c => c.name || c.phone || c.email) : ((ev && ev.contacts) || []),
       docs: evDocList,
@@ -5916,7 +5932,7 @@
       }
     }
     if (ev.location || ev.address || ev.parking || ev.mapsUrl) section('Location & Anfahrt', ev.location || '', rows([['Location', ev.location], ['Adresse', ev.address], ['Parkieren', ev.parking], ['Google Maps', maps]]), false);
-    if (ev.catering) { const p = el('div', 'gig-text', ev.catering); section('Verpflegung', '', p, false); }
+    if (ev.catering || ev.cateringTime) { const p = el('div', 'gig-text', (ev.cateringTime ? ev.cateringTime + ' Uhr' + (ev.catering ? ' – ' : '') : '') + (ev.catering || '')); section('Verpflegung', ev.cateringTime ? ev.cateringTime + ' Uhr' : '', p, false); }
     const contacts = Array.isArray(ev.contacts) ? ev.contacts.filter(c => c && (c.name || c.phone || c.email)) : [];
     if (contacts.length) {
       const box = el('div', 'gig-contacts');

@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.8 · Build 30 · 2026-11-16 */
+/*! Stagemate v0.4.9 · Build 31 · 2026-11-16 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1621,3 +1621,8 @@
 .gig-msg-red { margin: 0 0 8px; padding: 8px 12px; border-radius: 8px; background: #ef4444; color: #fff; font-weight: 600; font-size: 13px; }
 .gig-body > .note-info { margin: 0 0 10px; }
 .tt-setlink { display: inline-block; margin-top: 3px; font-size: 12.5px; color: var(--accent, #f5c518); text-decoration: underline; cursor: pointer; }
+
+/* v0.4.9 */
+.ev-togig { margin-left: auto; margin-right: 8px; background: #f5c518; color: #000; border-color: #f5c518; }
+@keyframes flash3 { 0%,100% { box-shadow: 0 0 0 0 transparent; transform: none; } 50% { box-shadow: 0 0 0 6px rgba(245,197,24,.75); transform: scale(1.08); } }
+.flash3 { animation: flash3 .8s ease-in-out 3; }
