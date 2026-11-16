@@ -1,4 +1,4 @@
-/*! Stagemate v0.3.2 · Build 17 · 2026-11-16 */
+/*! Stagemate v0.3.3 · Build 18 · 2026-11-16 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -5649,12 +5649,13 @@
     if (!id || !pw) return setMsg($('devMsg'), 'Bitte ID und Passwort eingeben.', 'error');
     $('devGo').disabled = true; setMsg($('devMsg'), 'Prüfe …');
     try {
-      if (Data.backend === 'firebase') {
+      if (Data.usesFirebase) {   // Web-Version – gilt auch auf der Anmeldeseite, bevor das eigene Konto verbunden ist
         const r = await Data.devSignIn(devEmail(id), pw);
         if (!r.ok) return setMsg($('devMsg'), r.error + (r.uid ? ` (UID: ${r.uid})` : ''), 'error');
         devDb = r.db; devUid = r.uid; $('devWho').textContent = `${devEmail(id)} · Firebase`;
       } else {
         if (await sha256(id + '|' + pw) !== DEV_HASH) return setMsg($('devMsg'), 'ID oder Passwort stimmt nicht.', 'error');
+        if (!rawDb) return setMsg($('devMsg'), 'Der Speicher ist noch nicht verbunden. Bitte kurz warten und nochmals versuchen.', 'error');
         devDb = rawDb; devUid = uid; $('devWho').textContent = `${id} · lokale Daten (${Data.backend})`;
       }
       closeDevModal(); $('devPw').value = '';
@@ -5664,7 +5665,7 @@
     finally { $('devGo').disabled = false; }
   });
   $('devClose').addEventListener('click', async () => {
-    if (Data.backend === 'firebase') await Data.devSignOut();
+    if (Data.usesFirebase) await Data.devSignOut();
     devDb = null; devData = null; $('devBody').innerHTML = '';
     $('devPanel').classList.add('hidden'); syncDevBtn();
   });
@@ -5708,11 +5709,11 @@
     // Diagnose: was wurde geladen, wo gab es Fehler
     const diag = el('div', 'dev-diag');
     const cnt = k => devData[k] && devData[k].error ? `${k}: Fehler (${devData[k].error})` : `${k}: ${devArr(devData[k]).length}`;
-    diag.append(el('b', null, 'Diagnose: '), `Speicher ${Data.backend === 'firebase' ? 'Firebase (housi-stagemate)' : Data.backend === 'claude' ? 'Claude-Artefakt (nur Daten dieses Artefakts)' : 'nur dieser Browser (lokal)'} · Entwickler-UID ${devUid || '–'} · ` + ['bands', 'members', 'contacts', 'presence'].map(cnt).join(' · '));
+    diag.append(el('b', null, 'Diagnose: '), `Speicher ${Data.usesFirebase ? 'Firebase (housi-stagemate)' : Data.backend === 'claude' ? 'Claude-Artefakt (nur Daten dieses Artefakts)' : 'nur dieser Browser (lokal)'} · Entwickler-UID ${devUid || '–'} · ` + ['bands', 'members', 'contacts', 'presence'].map(cnt).join(' · '));
     body.append(diag);
     ['bands', 'members', 'contacts', 'presence'].forEach(k => { const e = devErr(k, devData[k]); if (e) body.append(e); });
     if (!devArr(devData.bands).length && !devArr(devData.members).length && !['bands', 'members'].some(k => devData[k] && devData[k].error))
-      body.append(el('div', 'msg error', Data.backend === 'firebase'
+      body.append(el('div', 'msg error', Data.usesFirebase
         ? 'In Firebase sind noch keine Bands und Benutzer gespeichert. Erzeuge zuerst die Testdaten (testdaten.html) oder registriere ein Konto in der Web-Version.'
         : 'In diesem Speicher sind keine Daten. Die Artefakt-Version sieht nur ihre eigenen Daten – für alle echten Daten den Entwickler-Zugang in der Web-Version (GitHub-Link) benutzen.'));
     const bandName = id => (B.find(b => b.id === id) || {}).name || id;

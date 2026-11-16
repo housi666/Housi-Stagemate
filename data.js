@@ -1,4 +1,4 @@
-/*! Stagemate v0.3.2 · Build 17 · 2026-11-16 */
+/*! Stagemate v0.3.3 · Build 18 · 2026-11-16 */
 /* Stagemate – Datenschicht
  * ------------------------------------------------------------
  * Die einzige Stelle, die weiss, WO die Daten liegen.
@@ -253,7 +253,9 @@
   // Freigegeben ist nur, wer in Firestore unter developers/<uid> eingetragen ist (Regeln prüfen das).
   let devApp = null;
   async function devSignIn(email, password) {
-    if (state.backend !== 'firebase') return { ok: false, error: 'Nur in der Web-Version verfügbar.' };
+    // Nicht state.backend prüfen: auf der Anmeldeseite ist die Verbindung noch nicht fertig (backend = null)
+    if (!fbConfig()) return { ok: false, error: 'Nur in der Web-Version verfügbar.' };
+    if (!fbReady()) return { ok: false, error: 'Keine Verbindung zu Firebase. Prüfe deine Internetverbindung.' };
     try {
       devApp = firebase.apps.find(a => a.name === 'dev') || firebase.initializeApp(fbConfig(), 'dev');
       const cred = await devApp.auth().signInWithEmailAndPassword(email, password);
