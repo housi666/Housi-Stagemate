@@ -146,7 +146,118 @@
     if (!entry || entry.code !== code) return null;
     return { band, entry: { id: d.entryId, ...entry } };
   }
-  async function createBand(name) {
+  // ================= Band-Tag =================
+  const TAG_RE = /^[A-Z0-9]{1,3}$/;
+  const TAG_COOLDOWN = 5 * 60 * 1000;
+  const fmtTag = t => !t ? '' : t.length === 1 ? `-${t}-` : t.length === 2 ? `${t[0]}-${t[1]}` : t;
+  const normTagInput = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+  const TAG_RULES = () => (typeof STAGEMATE_TAG_RULES !== 'undefined' ? STAGEMATE_TAG_RULES : {});
+  const SHOW_DEFAULT = { logo: true, name: true, tag: true };
+  const showOf = b => ({ ...SHOW_DEFAULT, ...((b && b.show) || {}) });
+  const tagCooldownLeft = b => b && b.tagAt ? TAG_COOLDOWN - (Date.now() - Date.parse(b.tagAt)) : 0;
+  function tagWords(name) {
+    const R = TAG_RULES();
+    let s = String(name || '').toUpperCase();
+    Object.entries(R.replace || {}).forEach(([a, b]) => { s = s.split(a).join(b); });
+    s = s.replace(/[^A-Z0-9]+/g, ' ').trim();
+    const all = s ? s.split(' ') : [];
+    const ign = new Set(R.ignoreWords || []);
+    const words = all.filter(w => !ign.has(w));
+    return words.length ? words : all;
+  }
+  function tagCandidates(name, len) {
+    const R = TAG_RULES(), V = new RegExp('[' + (R.vowels || 'AEIOU') + ']', 'g');
+    const words = tagWords(name); if (!words.length) return [];
+    const joined = words.join('');
+    const S = {
+      initials: () => { let t = words.map(w => w[0]).join(''); const last = words[words.length - 1]; if (t.length < len) t += last.slice(1).replace(V, ''); if (t.length < len) t += last.slice(1); return t; },
+      initialsDigits: () => words.map(w => /^\d+$/.test(w) ? w : w[0]).join(''),
+      consonants: () => joined[0] + joined.slice(1).replace(V, ''),
+      firstLetters: () => joined,
+    };
+    const out = [];
+    (R.strategies || Object.keys(S)).forEach(k => { if (!S[k]) return; const t = S[k]().slice(0, len); if (t.length === len && !out.includes(t)) out.push(t); });
+    return out;
+  }
+  const tagSuggestions = name => [1, 2, 3].map(n => tagCandidates(name, n)[0]).filter(Boolean);
+  async function tagTaken(tag, exceptBandId) {
+    try { const q = await db.collection('bands').where('tag', '==', tag).get(); return q.docs.some(d => d.id !== exceptBandId); } catch (e) { return false; }
+  }
+  async function autoTag(name, exceptBandId) {
+    const len = TAG_RULES().length || 3;
+    for (const L of [...new Set([len, 3, 2, 1])]) for (const t of tagCandidates(name, L)) if (!(await tagTaken(t, exceptBandId))) return t;
+    const first = (tagCandidates(name, 1)[0] || 'X');
+    for (let i = 0; i < 20; i++) { const t = first + genCode().replace(/[^A-Z0-9]/g, '').slice(0, 2); if (!(await tagTaken(t, exceptBandId))) return t; }
+    return '';
+  }
+  function tagChip(t) { const c = el('span', 'band-tag', fmtTag(t)); c.title = 'Band-Tag ' + t; return c; }
+  function mountTagEditor(box, { getName, getTag, setTag, bandId }) {
+    box.innerHTML = ''; box.className = 'tag-editor';
+    const row = el('div', 'te-row');
+    const inp = el('input', 'te-input'); inp.type = 'text'; inp.maxLength = 3; inp.placeholder = 'z. B. NFL'; inp.autocomplete = 'off'; inp.spellcheck = false;
+    const gen = el('button', 'btn small ghost', 'Generieren'); gen.type = 'button';
+    const pv = el('span', 'band-tag te-preview');
+    row.append(inp, gen, el('span', 'te-arrow', 'Anzeige:'), pv);
+    const sug = el('div', 'te-sug'), note = el('div', 'te-note');
+    box.append(row, sug, note);
+    const paint = () => { const t = getTag(); if (inp.value !== t) inp.value = t; pv.textContent = t ? fmtTag(t) : '–'; pv.classList.toggle('empty', !t); };
+    const renderSug = () => {
+      sug.innerHTML = '';
+      const list = tagSuggestions(getName());
+      if (!list.length) { sug.append(el('span', 'te-sl', 'Beispiele erscheinen, sobald ein Bandname eingetragen ist.')); return; }
+      sug.append(el('span', 'te-sl', 'Beispiele:'));
+      list.forEach(t => { const b = el('button', 'te-chip', fmtTag(t)); b.type = 'button'; b.title = 'Übernehmen'; b.addEventListener('click', () => { setTag(t); paint(); }); sug.append(b); });
+    };
+    inp.addEventListener('input', () => { const v = normTagInput(inp.value); setTag(v); paint(); });
+    gen.addEventListener('click', async () => {
+      if (!getName()) return (note.textContent = 'Gib zuerst einen Bandnamen ein.');
+      gen.disabled = true; note.textContent = 'Suche freien Tag …';
+      const t = await autoTag(getName(), bandId ? bandId() : null);
+      gen.disabled = false; note.textContent = t ? '' : 'Es wurde kein freier Tag gefunden.';
+      if (t) { setTag(t); paint(); }
+    });
+    box._refresh = () => { paint(); renderSug(); };
+    box._note = t => { note.textContent = t || ''; };
+    box._refresh();
+  }
+
+  // ================= Nickname =================
+  const nickKey = n => String(n || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  function wordBlocked(v) {
+    const L = typeof STAGEMATE_BADWORDS !== 'undefined' ? STAGEMATE_BADWORDS : { contains: [], exact: [] };
+    const map = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '@': 'a', '$': 's', '!': 'i' };
+    const low = String(v || '').toLowerCase().replace(/[013457@$!]/g, c => map[c]);
+    const plain = low.replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue');
+    const letters = plain.replace(/[^a-z0-9]/g, '');
+    const tokens = plain.split(/[^a-z0-9]+/).filter(Boolean);
+    return (L.contains || []).some(w => letters.includes(w)) || (L.exact || []).some(w => tokens.includes(w) || letters === w);
+  }
+  async function nickTaken(name) {
+    const key = nickKey(name);
+    try {
+      const [a, b] = await Promise.all([
+        db.collection('members').where('nickKey', '==', key).get(),
+        db.collection('members').where('name', '==', name).get(),
+      ]);
+      return [...a.docs, ...b.docs].some(d => d.id !== uid);
+    } catch (e) { return false; }
+  }
+
+  // ================= PUID (eine ID pro Konto) =================
+  async function newPuid() {
+    for (let i = 0; i < 8; i++) {
+      const r = new Uint32Array(1); crypto.getRandomValues(r);
+      const id = 'PUID-' + String(r[0] % 100000000).padStart(8, '0');
+      try { const q = await db.collection('members').where('puid', '==', id).get(); if (q.empty) return id; } catch (e) { return id; }
+    }
+    return 'PUID-' + Date.now().toString().slice(-8);
+  }
+  async function ensurePuid() {
+    if (!profile || profile.puid || readOnly) return;
+    try { const p = clone(profile); p.puid = await newPuid(); await db.doc('members/' + uid).set(p); profile = p; } catch (e) {}
+  }
+
+  async function createBand(name, tag) {
     let code;
     for (let i = 0; i < 6; i++) {
       code = genCode();
@@ -154,7 +265,8 @@
       if (q.empty) break;
     }
     const ref = db.collection('bands').doc();
-    const band = { name, code, createdBy: uid, createdAt: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const band = { name, code, tag: tag || '', tagAt: now, show: { ...SHOW_DEFAULT }, createdBy: uid, createdAt: now };
     const cfg = normCfg(null);
     await db.doc(cfgPath(uid, ref.id)).set(cfg);
     await ref.set(band);
@@ -397,6 +509,9 @@
     $('fEmailField').classList.toggle('hidden', Data.backend === 'firebase');
     $('fTerms').checked = false;
     $('termsWrap').classList.toggle('hidden', !needsTerms());
+    regTag = ''; mountRegTag();
+    $('puidRow').classList.toggle('hidden', !(profile && profile.puid));
+    $('puidVal').textContent = (profile && profile.puid) || ''; $('puidVal').classList.add('hidden'); $('puidBtn').textContent = 'PUID anzeigen';
     $('fPhone').value = profile?.phone || '';
     photoDraft = undefined; setMsg($('photoMsg'), ''); renderPhoto();
     $('fCode').value = ''; $('fBandName').value = '';
@@ -409,7 +524,9 @@
     ids.forEach(id => {
       const card = el('div', 'band-card');
       const head = el('div', 'band-card-head');
-      head.append(el('span', 'bname', bands[id].name + (isFounder(id) ? '  · Admin' : '')), el('span', 'bcode', 'Code ' + bands[id].code));
+      head.append(el('span', 'bname', bands[id].name + (isFounder(id) ? '  · Admin' : '')));
+      if (bands[id].tag) head.append(tagChip(bands[id].tag));
+      head.append(el('span', 'bcode', 'Code ' + bands[id].code));
       card.append(head);
       const hint = el('button', 'linkish-btn band-share-link', 'Sichtbarkeit von E-Mail und Telefon → Einstellungen'); hint.type = 'button';
       hint.addEventListener('click', () => showPage('settings'));
@@ -439,6 +556,27 @@
     updateDirty();
   }
 
+  // Band-Tag bei der Gründung
+  let regTag = '';
+  function mountRegTag() { mountTagEditor($('fTagEditor'), { getName: () => $('fBandName').value.trim(), getTag: () => regTag, setTag: v => { regTag = v; } }); }
+  $('fBandName').addEventListener('input', () => { const b = $('fTagEditor'); if (b._refresh) b._refresh(); });
+  // PUID nur per Klick einblenden
+  $('puidBtn').addEventListener('click', () => {
+    const v = $('puidVal'), show = v.classList.contains('hidden');
+    v.classList.toggle('hidden', !show); $('puidBtn').textContent = show ? 'Ausblenden' : 'PUID anzeigen';
+  });
+  // Passwort für Änderungen an persönlichen Angaben (Web-Version)
+  function askPassword() {
+    return new Promise(resolve => {
+      const m = $('pwAskModal'), inp = $('pwAskInput');
+      inp.value = ''; setMsg($('pwAskMsg'), ''); m.classList.remove('hidden'); setTimeout(() => inp.focus(), 30);
+      const done = v => { m.classList.add('hidden'); ['pwAskOk', 'pwAskCancel', 'pwAskX'].forEach(id => $(id).onclick = null); inp.onkeydown = null; resolve(v); };
+      $('pwAskOk').onclick = () => { if (!inp.value) return setMsg($('pwAskMsg'), 'Bitte gib dein Passwort ein.', 'error'); done(inp.value); };
+      $('pwAskCancel').onclick = () => done(null); $('pwAskX').onclick = () => done(null);
+      inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('pwAskOk').onclick(); } };
+    });
+  }
+
   form.addEventListener('submit', async ev => {
     ev.preventDefault();
     const msg = $('regMsg');
@@ -448,6 +586,7 @@
     const acceptTerms = needsTerms();
     const phone = $('fPhone').value.trim();
     if (name.length < 2) return setMsg(msg, 'Bitte gib einen Nickname ein (mind. 2 Zeichen).', 'error');
+    if (wordBlocked(name)) return setMsg(msg, 'Dieser Nickname enthält ein gesperrtes Wort. Bitte wähle einen anderen.', 'error');
     if (!firstName) return setMsg(msg, 'Bitte gib deinen Vornamen ein.', 'error');
     if (!lastName) return setMsg(msg, 'Bitte gib deinen Nachnamen ein.', 'error');
     if (acceptTerms && !$('fTerms').checked) return setMsg(msg, 'Bitte akzeptiere die Nutzungsbedingungen und die Datenschutzerklärung.', 'error');
@@ -460,14 +599,33 @@
     if (newBandMode === 'join' && !/^[A-Z0-9]{6}([A-Z0-9]{2})?$/.test(code)) return setMsg(msg, 'Bitte gib einen gültigen Code ein (6 oder 8 Zeichen).', 'error');
     if (newBandMode === 'join' && !joinBand) return setMsg(msg, 'Zu diesem Code wurde (noch) keine Band gefunden.', 'error');
     if (newBandMode === 'create' && bandName.length < 2) return setMsg(msg, 'Bitte gib den Namen der neuen Band ein.', 'error');
+    if (newBandMode === 'create' && wordBlocked(bandName)) return setMsg(msg, 'Der Bandname enthält ein gesperrtes Wort.', 'error');
+    if (newBandMode === 'create' && regTag && !TAG_RE.test(regTag)) return setMsg(msg, 'Der Band-Tag braucht 1 bis 3 Zeichen (A–Z, 0–9).', 'error');
     if (!profile && newBandMode !== 'none' && newRoles.size === 0) return setMsg(msg, 'Bitte wähle mindestens ein Instrument bzw. eine Rolle.', 'error');
 
     const btn = $('regBtn'); btn.disabled = true;
-    setMsg(msg, 'Wird gespeichert …');
+    setMsg(msg, 'Wird geprüft …');
     const isNew = !profile;
+    if ((isNew || nickKey(name) !== nickKey(profile.name)) && await nickTaken(name)) { btn.disabled = false; return setMsg(msg, `Der Nickname „${name}“ ist schon vergeben. Bitte wähle einen anderen.`, 'error'); }
+    let bandTag = '';
+    if (newBandMode === 'create') {
+      bandTag = regTag || await autoTag(bandName);
+      if (!bandTag) { btn.disabled = false; return setMsg(msg, 'Es konnte kein Band-Tag erzeugt werden. Bitte gib selbst einen ein.', 'error'); }
+      if (regTag && await tagTaken(regTag)) { btn.disabled = false; return setMsg(msg, `Der Band-Tag ${fmtTag(regTag)} ist schon vergeben.`, 'error'); }
+    }
+    const personalChanged = !isNew && (name !== (profile.name || '') || firstName !== (profile.firstName || '') || lastName !== (profile.lastName || '') || phone !== (profile.phone || '') || photoDraft !== undefined);
+    if (personalChanged && Data.backend === 'firebase') {
+      const pw = await askPassword();
+      if (!pw) { btn.disabled = false; return setMsg(msg, 'Nicht gespeichert – Passwort nicht bestätigt.', 'error'); }
+      const r = await Data.reauthenticate(pw);
+      if (!r.ok) { btn.disabled = false; return setMsg(msg, /credential|wrong-password/.test(r.code || '') ? 'Das Passwort stimmt nicht.' : r.error, 'error'); }
+    }
+    setMsg(msg, 'Wird gespeichert …');
     try {
       const now = new Date().toISOString();
       const p = profile ? clone(profile) : { createdAt: now, bandIds: [], memberships: {} };
+      if (!p.puid) p.puid = await newPuid();
+      p.nickKey = nickKey(name);
       p.name = name; p.firstName = firstName; p.lastName = lastName; p.email = email; p.phone = phone; p.updatedAt = now;
       if (acceptTerms) p.terms = { version: LEGAL_VERSION, acceptedAt: now };
       if (photoDraft !== undefined) { if (photoDraft) p.photo = photoDraft; else delete p.photo; }
@@ -483,7 +641,7 @@
         if (joinBand.cfg.removed[uid] && !joinEntry) { btn.disabled = false; return setMsg(msg, `Du wurdest aus „${joinBand.name}“ entfernt. Bitte den Admin um einen persönlichen Einladungscode.`, 'error'); }
         added = joinBand;
       } else if (newBandMode === 'create') {
-        added = await createBand(bandName);
+        added = await createBand(bandName, bandTag);
       }
       if (added) {
         bands[added.id] = added;
@@ -496,7 +654,7 @@
       profile = p; photoDraft = undefined;
 
       let text = 'Gespeichert.';
-      if (added && newBandMode === 'create') text = `Band „${added.name}“ gegründet! Du bist Admin. Einladungscode: ${added.code}`;
+      if (added && newBandMode === 'create') text = `Band „${added.name}“ ${fmtTag(added.tag)} gegründet! Du bist Admin. Einladungscode: ${added.code}`;
       else if (added) text = `Willkommen bei „${added.name}“!`;
       setMsg(msg, text, 'ok');
 
@@ -647,6 +805,7 @@
 
     $('auth').classList.add('hidden');
     $('app').classList.remove('hidden');
+    ensurePuid();
     if (form.parentElement !== $('profileSlot')) { $('profileSlot').appendChild(form); prepareForm(); }
     renderAppHeader();
     showPage(currentPage);
@@ -655,12 +814,16 @@
   function renderAppHeader() {
     const band = bands[currentBand];
     const roles = viewAs ? viewAs.roles : rolesOf(profile, currentBand);
-    $('brandName').textContent = band.name;
+    const sh = showOf(band);
+    const bn = $('brandName'); bn.innerHTML = '';
+    if (sh.name) bn.append(band.name);
+    if (sh.tag && band.tag) bn.append(tagChip(band.tag));
     renderBandList();
     renderBrandLogo();
     loadEvents();
     setAvatar($('appAvatar'), profile.name, profile.photo);
-    $('appName').textContent = profile.name;
+    const an = $('appName'); an.innerHTML = ''; an.append(profile.name);
+    bandIdsOf(profile).forEach(id => { const b = bands[id]; if (b && b.tag && showOf(b).tag) an.append(tagChip(b.tag)); });
     $('appRole').textContent = 'Profil und Bands';
     const wl = $('welcomeLine'); wl.innerHTML = '';
     wl.append('Hallo ', el('strong', null, profile.name.split(/\s+/)[0]), ', willkommen zurück!');
@@ -683,6 +846,7 @@
     ids.forEach(id => {
       const b = el('button', 'band-opt' + (id === currentBand ? ' current' : '')); b.type = 'button';
       b.append(el('span', 'bo-dot'), el('span', 'bo-name', bands[id].name));
+      if (bands[id].tag && showOf(bands[id]).tag) b.append(tagChip(bands[id].tag));
       if (isFounder(id)) b.append(el('span', 'bo-tag', 'Admin'));
       b.addEventListener('click', () => {
         $('bandSwitchWrap').classList.remove('open'); $('bandToggle').setAttribute('aria-expanded', 'false');
@@ -950,7 +1114,8 @@
   $('vaSwitch').addEventListener('change', e => startViewAs(e.target.value));
   $('vaStop').addEventListener('click', stopViewAs);
 
-  const snapOf = (cfg, name) => JSON.stringify({ r: cfg.roles, a: cfg.access, s: cfg.assignments, x: cfg.extra, ad: cfg.admins, rm: cfg.removed, c: cfg.categories, lg: cfg.logo || null, n: name });
+  let draftTag = '', draftShow = { ...SHOW_DEFAULT };
+  const snapOf = (cfg, name) => JSON.stringify({ r: cfg.roles, a: cfg.access, s: cfg.assignments, x: cfg.extra, ad: cfg.admins, rm: cfg.removed, c: cfg.categories, lg: cfg.logo || null, n: name, tg: draftTag, sh: draftShow });
   const isDirty = () => !viewAs && !!draft && draftBand === currentBand && canRoles(currentBand) && snapOf(draft, draftName) !== savedSnap;
   function updateDirty() {
     const t = isDirty(), p = isProfileDirty(), st = isSettingsDirty();
@@ -967,6 +1132,7 @@
     draft.admins = [...band.cfg.admins];
     draftBand = currentBand;
     draftName = band.name;
+    draftTag = band.tag || ''; draftShow = showOf(band);
     savedSnap = snapOf(draft, draftName);
   }
   function discardDraft() { draft = null; draftBand = null; updateDirty(); }
@@ -997,6 +1163,9 @@
     renderLogoPanel();
     if (admin) {
       $('aBandName').value = draftName;
+      mountTagEditor($('aTagEditor'), { getName: () => draftName, getTag: () => draftTag, setTag: v => { draftTag = v; updateDirty(); }, bandId: () => currentBand });
+      { const left = tagCooldownLeft(band); $('aTagEditor')._note(left > 0 ? `Der Tag kann in ${Math.ceil(left / 60000)} Min. wieder geändert werden.` : ''); }
+      [['aShowLogo', 'logo'], ['aShowName', 'name'], ['aShowTag', 'tag']].forEach(([id, k]) => { $(id).checked = draftShow[k] !== false; });
       renderAddForm();
     }
     renderMembers(true);
@@ -2037,7 +2206,8 @@
     pvTimer = setTimeout(() => bar.classList.add('hidden'), 3500);
   }
   $('aNewRole').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addRole(); } });
-  $('aBandName').addEventListener('input', () => { draftName = $('aBandName').value.trim(); updateDirty(); });
+  $('aBandName').addEventListener('input', () => { draftName = $('aBandName').value.trim(); const b = $('aTagEditor'); if (b._refresh) b._refresh(); updateDirty(); });
+  [['aShowLogo', 'logo'], ['aShowName', 'name'], ['aShowTag', 'tag']].forEach(([id, k]) => $(id).addEventListener('change', () => { draftShow = { ...draftShow, [k]: $(id).checked }; updateDirty(); }));
 
   // ----- Register-Berechtigungen -----
   function levelSelect(value, withDefault, defaultLevel, onChange) {
@@ -2060,6 +2230,15 @@
     const newName = draftName;
     if (newName.length < 2) return setMsg(msg, 'Bitte gib einen Bandnamen ein.', 'error');
     if (!draft.roles.length) return setMsg(msg, 'Es braucht mindestens eine Rolle.', 'error');
+    if (newName !== band.name && wordBlocked(newName)) return setMsg(msg, 'Der Bandname enthält ein gesperrtes Wort.', 'error');
+    const tagChanged = draftTag !== (band.tag || '');
+    const showChanged = JSON.stringify(draftShow) !== JSON.stringify(showOf(band));
+    if (tagChanged) {
+      if (!TAG_RE.test(draftTag)) return setMsg(msg, 'Der Band-Tag braucht 1 bis 3 Zeichen (A–Z, 0–9).', 'error');
+      const left = tagCooldownLeft(band);
+      if (left > 0) return setMsg(msg, `Der Band-Tag kann erst in ${Math.ceil(left / 60000)} Min. wieder geändert werden.`, 'error');
+      if (await tagTaken(draftTag, band.id)) return setMsg(msg, `Der Band-Tag ${fmtTag(draftTag)} ist schon vergeben.`, 'error');
+    }
     const btns = [$('aSave'), $('ubSave')];
     btns.forEach(b => b.disabled = true);
     setMsg(msg, 'Wird gespeichert …');
@@ -2076,9 +2255,9 @@
       const cfg = { roles: draft.roles, access: draft.access, assignments, extra, removed: draft.removed, categories: cleanCategories(), logo: draft.logo || null, updatedAt: now, rolesAt: now };
       cfg.admins = [];
       await db.doc(cfgPath(uid, band.id)).set(clone(cfg));
-      if (newName !== band.name) {
+      if (newName !== band.name || tagChanged || showChanged) {
         const { id, cfg: _c, ...rest } = band;
-        await db.doc('bands/' + band.id).set({ ...rest, name: newName });
+        await db.doc('bands/' + band.id).set({ ...rest, name: newName, tag: draftTag, tagAt: tagChanged ? now : (band.tagAt || null), show: { ...draftShow } });
         const opt = [...$('bandSwitch').options].find(o => o.value === band.id);
         if (opt) opt.textContent = newName + ' (Admin)';
       }
@@ -2171,7 +2350,7 @@
   }
   function renderBrandLogo() {
     const box = $('brandLogo'); box.innerHTML = '';
-    const lg = bands[currentBand] && bands[currentBand].cfg.logo;
+    const lg = bands[currentBand] && showOf(bands[currentBand]).logo && bands[currentBand].cfg.logo;
     if (lg) { box.classList.add('custom'); box.appendChild(logoNode(lg)); }
     else { box.classList.remove('custom'); box.appendChild(defaultLogo()); }
   }
@@ -4704,6 +4883,37 @@
     finish();
   }
 
+  // ----- E-Mail in drei Feldern: name @ domain . endung -----
+  const EMAIL_PARTS = ['fbEmailUser', 'fbEmailDomain', 'fbEmailTld'];
+  const emailValue = () => { const [u, d, t] = EMAIL_PARTS.map(id => $(id).value.trim()); return u && d && t ? `${u}@${d}.${t}` : ''; };
+  const emailValid = () => {
+    const [u, d, t] = EMAIL_PARTS.map(id => $(id).value.trim());
+    return /^[^\s@]+$/.test(u) && /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i.test(d) && /^[a-z]{2,12}$/i.test(t);
+  };
+  function fillEmail(full) {
+    const at = full.lastIndexOf('@'); if (at < 0) return false;
+    const user = full.slice(0, at).trim(), host = full.slice(at + 1).trim();
+    const dot = host.lastIndexOf('.');
+    $('fbEmailUser').value = user;
+    $('fbEmailDomain').value = dot > 0 ? host.slice(0, dot) : host;
+    $('fbEmailTld').value = dot > 0 ? host.slice(dot + 1) : '';
+    $(dot > 0 ? 'fbEmailTld' : 'fbEmailDomain').focus();
+    return true;
+  }
+  function setupEmailSplit() {
+    const [u, d, t] = EMAIL_PARTS.map(id => $(id));
+    // Ganze Adresse eingefügt oder „@“ getippt -> automatisch aufteilen
+    u.addEventListener('input', () => { if (u.value.includes('@')) { if (!fillEmail(u.value)) return; if (!u.value) d.focus(); } });
+    d.addEventListener('input', () => {
+      if (d.value.includes('@')) { fillEmail(u.value + d.value); return; }
+      const v = d.value, i = v.lastIndexOf('.');
+      if (i >= 0 && i === v.length - 1) { d.value = v.slice(0, -1); t.focus(); }   // „.“ am Ende springt ins letzte Feld
+    });
+    d.addEventListener('paste', e => { const txt = (e.clipboardData || window.clipboardData).getData('text'); if (txt && txt.includes('.')) { e.preventDefault(); const dot = txt.lastIndexOf('.'); d.value = txt.slice(0, dot).replace(/^@/, ''); t.value = txt.slice(dot + 1); t.focus(); } });
+    t.addEventListener('input', () => { t.value = t.value.replace(/[^a-z]/gi, ''); });
+    [d, t].forEach(x => x.addEventListener('keydown', e => { if (e.key === 'Backspace' && !x.value) { e.preventDefault(); (x === t ? d : u).focus(); } }));
+  }
+
   // ----- Konto-Anmeldung (nur Web-Version mit Firebase) -----
   let fbPane = null, fbTab = 'in';
   function showFbLogin(offline) {
@@ -4715,7 +4925,15 @@
         <h2 id="fbTitle">Willkommen zurück</h2>
         <p class="hint" id="fbHint">Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.</p>
         <form id="fbForm" novalidate>
-          <div class="field"><label for="fbEmail">E-Mail</label><input id="fbEmail" type="email" autocomplete="email" inputmode="email"></div>
+          <div class="field"><label for="fbEmailUser">E-Mail</label>
+            <div class="email-split">
+              <input id="fbEmailUser" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="name">
+              <span>@</span>
+              <input id="fbEmailDomain" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="beispiel">
+              <span>.</span>
+              <input id="fbEmailTld" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ch" maxlength="12">
+            </div>
+          </div>
           <div class="field"><label for="fbPw">Passwort</label><input id="fbPw" type="password" autocomplete="current-password"></div>
           <div class="field hidden" id="fbPw2Wrap"><label for="fbPw2">Passwort wiederholen</label><input id="fbPw2" type="password" autocomplete="new-password"></div>
           <button type="submit" class="btn" id="fbGo">Anmelden</button>
@@ -4731,19 +4949,21 @@
         $('fbHint').textContent = up ? 'Erstelle dein Stagemate-Konto. Danach trittst du deiner Band bei oder gründest eine.' : 'Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.';
         $('fbPw2Wrap').classList.toggle('hidden', !up);
         $('fbPw').autocomplete = up ? 'new-password' : 'current-password';
-        $('fbEmail').autocomplete = up ? 'off' : 'email';
         // Angaben aus „Anmelden“ nicht in „Konto erstellen“ übernehmen (und umgekehrt)
-        ['fbEmail', 'fbPw', 'fbPw2'].forEach(id => { $(id).value = ''; $(id).type = id === 'fbEmail' ? 'email' : 'password'; });
+        EMAIL_PARTS.forEach(id => { $(id).value = ''; });
+        ['fbPw', 'fbPw2'].forEach(id => { $(id).value = ''; $(id).type = 'password'; });
         $('fbGo').textContent = up ? 'Konto erstellen' : 'Anmelden';
         $('fbReset').classList.toggle('hidden', up);
         setMsg($('fbMsg'), '');
       };
       fbPane.querySelectorAll('[data-fbtab]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.fbtab)));
       enhancePw($('fbPw')); enhancePw($('fbPw2'));
+      setupEmailSplit();
       $('fbForm').addEventListener('submit', async e => {
         e.preventDefault();
-        const email = $('fbEmail').value.trim(), pw = $('fbPw').value;
-        if (!email || !pw) return setMsg($('fbMsg'), 'Bitte E-Mail und Passwort eingeben.', 'error');
+        const email = emailValue(), pw = $('fbPw').value;
+        if (!EMAIL_PARTS.every(id => $(id).value.trim()) || !pw) return setMsg($('fbMsg'), 'Bitte E-Mail (alle drei Felder) und Passwort eingeben.', 'error');
+        if (!emailValid()) return setMsg($('fbMsg'), 'Diese E-Mail-Adresse sieht nicht gültig aus.', 'error');
         if (fbTab === 'up' && pw !== $('fbPw2').value) return setMsg($('fbMsg'), 'Die beiden Passwörter stimmen nicht überein.', 'error');
         if (fbTab === 'up' && pw.length < 6) return setMsg($('fbMsg'), 'Das Passwort braucht mindestens 6 Zeichen.', 'error');
         $('fbGo').disabled = true; setMsg($('fbMsg'), fbTab === 'up' ? 'Konto wird erstellt …' : 'Anmelden …');
@@ -4753,8 +4973,8 @@
         else setMsg($('fbMsg'), 'Angemeldet – einen Moment …', 'ok');
       });
       $('fbReset').addEventListener('click', async () => {
-        const email = $('fbEmail').value.trim();
-        if (!email) return setMsg($('fbMsg'), 'Gib zuerst deine E-Mail-Adresse ein, dann nochmals auf «Passwort vergessen?» klicken.', 'error');
+        const email = emailValue();
+        if (!emailValid()) return setMsg($('fbMsg'), 'Gib zuerst deine E-Mail-Adresse ein, dann nochmals auf «Passwort vergessen?» klicken.', 'error');
         const r = await Data.resetPassword(email);
         setMsg($('fbMsg'), r.ok ? 'Falls ein Konto existiert, ist eine E-Mail zum Zurücksetzen unterwegs. Schau auch im Spam-Ordner nach.' : r.error, r.ok ? 'ok' : 'error');
       });

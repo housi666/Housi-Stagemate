@@ -1096,3 +1096,26 @@
   .housi-mark { position: fixed; right: 14px; bottom: 10px; width: 62px; color: var(--text); opacity: .28; pointer-events: none; z-index: 5; line-height: 0; }
   .housi-mark svg { width: 100%; height: auto; display: block; }
   @media (max-width: 760px) { .housi-mark { width: 46px; right: 8px; bottom: 6px; } }
+
+  /* ---- v0.1.7: E-Mail-Felder, Band-Tag, PUID ---- */
+  .email-split { display: flex; align-items: center; gap: 6px; }
+  .email-split input { flex: 1 1 0; min-width: 0; }
+  .email-split input#fbEmailTld { flex: 0 0 64px; }
+  .email-split span { font-weight: 700; color: var(--muted); }
+  .band-tag { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .78em; font-weight: 700; letter-spacing: .08em; line-height: 1; padding: 3px 5px; margin-left: 6px; border-radius: 5px; border: 1px solid var(--accent-border); background: var(--accent-soft); color: var(--accent-text); vertical-align: middle; white-space: nowrap; }
+  :root[data-theme="dark"] .band-tag { background: rgba(232,163,61,.14); border-color: rgba(232,163,61,.4); color: var(--accent); }
+  .sidebar .band-tag { background: rgba(232,163,61,.14); border-color: rgba(232,163,61,.4); color: var(--accent); }
+  .band-tag.empty { opacity: .45; }
+  .tag-editor .te-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tag-editor .te-input { width: 90px !important; flex: none; text-transform: uppercase; letter-spacing: .2em; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .tag-editor .te-arrow { font-size: 12.5px; color: var(--muted); margin-left: 4px; }
+  .tag-editor .te-preview { font-size: 15px; margin-left: 0; padding: 5px 8px; }
+  .tag-editor .te-sug { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+  .tag-editor .te-chip { border: 1px dashed var(--border-strong); background: var(--surface); color: var(--text); border-radius: 6px; padding: 3px 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; letter-spacing: .08em; cursor: pointer; }
+  .tag-editor .te-chip:hover { border-color: var(--accent); }
+  .tag-editor .te-note { font-size: 12.5px; color: var(--warn-text); margin-top: 6px; min-height: 0; }
+  .show-opts { display: flex; gap: 6px 22px; flex-wrap: wrap; }
+  .show-opts .terms-check { margin: 0; }
+  .puid-row { display: flex; align-items: center; gap: 12px; margin: -4px 0 16px; }
+  .puid-row .flabel { margin: 0; }
+  .puid-row code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; padding: 3px 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--border); letter-spacing: .04em; }

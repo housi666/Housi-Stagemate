@@ -3,13 +3,23 @@
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.1.6';
-const APP_BUILD = 7;
+const APP_VERSION = 'v0.1.7';
+const APP_BUILD = 8;
 const APP_BUILD_DATE = '2026-11-16';
 const APP_PHASE = 'Pre-Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.1.7', date: '2026-11-16', items: [
+    { type: 'neu', text: 'Band-Tag (1–3 Zeichen): bei der Gründung setzen oder generieren, in der Verwaltung änderbar (höchstens alle 5 Minuten)' },
+    { type: 'neu', text: 'Sichtbarkeit von Bandlogo, Bandname und Band-Tag einstellbar' },
+    { type: 'neu', text: 'Band-Tags erscheinen neben dem Nickname und in der Bandliste' },
+    { type: 'neu', text: 'PUID: eine feste ID pro Konto, im Profil per Klick einblendbar' },
+    { type: 'neu', text: 'Nickname muss eindeutig sein; gesperrte Wörter (Liste in badwords.js)' },
+    { type: 'neu', text: 'E-Mail-Eingabe in drei Feldern: name @ domain . endung' },
+    { type: 'neu', text: 'Persönliche Angaben ändern nur mit Passwort (Web-Version)' },
+    { type: 'besser', text: 'Regeln für den automatischen Tag in tagrules.js, selbst bearbeitbar' },
+  ] },
   { version: 'v0.1.6', date: '2026-11-16', items: [
     { type: 'neu', text: 'Registrierung mit Nickname, Vorname und Nachname' },
     { type: 'neu', text: 'Nutzungsbedingungen und Datenschutzerklärung (müssen akzeptiert werden)' },
