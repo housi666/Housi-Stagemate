@@ -1,14 +1,15 @@
-/*! Stagemate v0.4.16 · Build 38 · 2026-11-17 */
+/*! Stagemate v0.4.20 · Build 42 · 2026-11-17 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
 
 (() => {
   const FIXED_ROLES = ['Gründer', 'Organisation', 'Checkliste'];   // immer vorhanden, können nicht entfernt werden
+  const ROLE_REGS = { 'Checkliste': ['page4'], 'Setlist': ['page6', 'page7'], 'Timetable': ['page8'] };   // Rolle schaltet „Bearbeiten“ im Register frei
   const CL_ROLE = 'Checkliste';   // schaltet „Bearbeiten“ in der Registerkarte „Checkliste“ frei
   const ROLE_RENAMES = { 'Management': 'Organisation', 'Verwaltung': 'Organisation' };
   const renameRoles = list => Array.isArray(list) ? [...new Set(list.map(r => ROLE_RENAMES[r] || r))] : list;
-  const DEFAULT_ROLES = ['Gründer', 'Gesang', 'Backing Vocals', 'Gitarre', 'Bass', 'Schlagzeug', 'Percussion', 'Keyboard', 'Bläser', 'Technik', 'Organisation', 'Checkliste'];
+  const DEFAULT_ROLES = ['Gründer', 'Gesang', 'Backing Vocals', 'Gitarre', 'Bass', 'Schlagzeug', 'Percussion', 'Keyboard', 'Bläser', 'Technik', 'Organisation', 'Checkliste', 'Setlist', 'Timetable'];
   // Register, deren Sichtbarkeit/Berechtigung der Admin steuert
   const REGISTERS = [
     { id: 'page2', title: 'Kalender' },
@@ -413,7 +414,7 @@
     if (!b) return 'edit';
     const a = b.cfg.access;
     // Rolle „Checkliste“ schaltet „Bearbeiten“ in der Checkliste frei
-    if (reg === 'page4' && rolesOfUid(bandId, memberUid).includes(CL_ROLE)) return 'edit';
+    if (rolesOfUid(bandId, memberUid).some(r => (ROLE_REGS[r] || []).includes(reg))) return 'edit';
     if (viewAs && memberUid === uid && bandId === currentBand) {
       const o = viewAs.uid && a.members[viewAs.uid] && a.members[viewAs.uid][reg];
       return o || a.defaults[reg] || (reg === 'page5' ? 'read' : 'edit');
@@ -1748,7 +1749,7 @@
   // ================= Verwaltung =================
   let draft = null;        // Arbeitskopie der Band-Einstellungen (nur Admins)
   let draftBand = null;    // zu welcher Band die Arbeitskopie gehört
-  let draftName = '';
+  let draftName = '', draftGenre = '';
   let savedSnap = '';
   let members = [];
   let addRolesSet = new Set();
@@ -1807,7 +1808,7 @@
   $('vaStop').addEventListener('click', stopViewAs);
 
   let draftTag = '', draftShow = { ...SHOW_DEFAULT };
-  const snapOf = (cfg, name) => JSON.stringify({ r: cfg.roles, a: cfg.access, s: cfg.assignments, x: cfg.extra, ad: cfg.admins, rm: cfg.removed, c: cfg.categories, lg: cfg.logo || null, n: name, tg: draftTag, sh: draftShow });
+  const snapOf = (cfg, name) => JSON.stringify({ r: cfg.roles, a: cfg.access, s: cfg.assignments, x: cfg.extra, ad: cfg.admins, rm: cfg.removed, c: cfg.categories, lg: cfg.logo || null, n: name, tg: draftTag, sh: draftShow, gn: draftGenre });
   const isDirty = () => !viewAs && !!draft && draftBand === currentBand && canRoles(currentBand) && snapOf(draft, draftName) !== savedSnap;
   function updateDirty() {
     const t = isDirty(), p = isProfileDirty(), st = isSettingsDirty();
@@ -1824,7 +1825,7 @@
     draft.admins = [...band.cfg.admins];
     draftBand = currentBand;
     draftName = band.name;
-    draftTag = band.tag || ''; draftShow = showOf(band);
+    draftTag = band.tag || ''; draftShow = showOf(band); draftGenre = band.genre || '';
     savedSnap = snapOf(draft, draftName);
   }
   function discardDraft() { draft = null; draftBand = null; updateDirty(); }
@@ -1856,7 +1857,7 @@
     if (rolesMgr) { setMsg($('aMsg'), ''); renderRoleEditor(); renderCatEditor(); }
     renderLogoPanel();
     if (admin) {
-      $('aBandName').value = draftName;
+      $('aBandName').value = draftName; $('aGenre').value = draftGenre; genreHint();
       mountTagEditor($('aTagEditor'), { getName: () => draftName, getTag: () => draftTag, setTag: v => { draftTag = v; updateDirty(); }, bandId: () => currentBand });
       { const left = tagCooldownLeft(band); $('aTagEditor')._note(left > 0 ? `Der Tag kann in ${Math.ceil(left / 60000)} Min. wieder geändert werden.` : ''); }
       [['aShowLogo', 'logo'], ['aShowName', 'name'], ['aShowTag', 'tag']].forEach(([id, k]) => { $(id).checked = draftShow[k] !== false; });
@@ -2592,7 +2593,7 @@
     $('slItemH').textContent = isLib ? (it ? 'Song bearbeiten' : 'Neuer Song') : (it ? 'Element bearbeiten' : SL_TYPES[ty].label + (ty === 'song' ? ' erstellen' : ' hinzufügen'));
     $('slTitle').value = it ? (it.title || '') : (ty === 'song' ? '' : SL_TYPES[ty].label);
     $('slArtist').value = it ? (it.artist || '') : ''; $('slRelType').value = it && it.relType ? it.relType : 'album'; $('slAlbum').value = it ? (it.album || '') : '';
-    $('slYear').value = it && it.year ? it.year : ''; $('slGenre').value = it ? (it.genre || '') : ''; $('slDur').value = slFmt(it ? it.dur : SL_TYPES[ty].dur);
+    $('slYear').value = it && it.year ? it.year : ''; $('slGenre').value = it ? (it.genre || '') : (ty === 'song' && bands[currentBand] && bands[currentBand].genre) || ''; $('slDur').value = slFmt(it ? it.dur : SL_TYPES[ty].dur);
     $('slKey').value = it ? (it.key || '') : ''; $('slBpm').value = it && it.bpm ? it.bpm : ''; $('slNote').value = it ? (it.note || '') : '';
     slRelHint();
     const song = isLib || ty === 'song';
@@ -3446,6 +3447,8 @@
   // ----- Rollenliste -----
   const ROLE_RIGHTS = {
     'Organisation': 'Rollen der Mitglieder zuweisen (ausser „Organisation“ bei sich selbst), Rollenliste, Termin-Kategorien und Bandlogo bearbeiten, Gigs bearbeiten und löschen, Dokumente hinzufügen und entfernen, alle Checklisten-Einträge ändern und Mitglieder zuweisen, der Auflösung der Band zustimmen.',
+    'Setlist': 'Schaltet „Bearbeiten“ in den Registerkarten „Setlist“ und „Songs“ frei – auch wenn dort sonst „Nur lesen“ oder „Ausgeblendet“ eingestellt ist.',
+    'Timetable': 'Schaltet „Bearbeiten“ in der Registerkarte „Timetable“ frei – auch wenn dort sonst „Nur lesen“ oder „Ausgeblendet“ eingestellt ist.',
     'Checkliste': 'Schaltet „Bearbeiten“ in der Registerkarte „Checkliste“ frei – auch wenn dort sonst „Nur lesen“ oder „Ausgeblendet“ eingestellt ist. Eigene Reiter und Unterreiter erstellen, bearbeiten und löschen, Checklisten erstellen.',
   };
   function renderRoleRights() {
@@ -3505,6 +3508,17 @@
     pvTimer = setTimeout(() => bar.classList.add('hidden'), 3500);
   }
   $('aNewRole').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addRole(); } });
+  // Band-Genre: gesetzt von Admin, sonst automatisch das häufigste Genre der Songs
+  const bandGenreAuto = () => {
+    const c = {}; [...slSongs.map(x => x.genre), ...slLists.flatMap(l => (l.items || []).filter(i => i.type === 'song').map(i => i.genre))].map(x => (x || '').trim()).filter(Boolean).forEach(g => c[g] = (c[g] || 0) + 1);
+    return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+  };
+  function genreHint() {
+    const a = slBand === currentBand ? bandGenreAuto() : '';
+    $('aGenreHint').textContent = draftGenre ? '' : (a ? 'Automatisch aus den Songs: ' + a : 'Leer: wird automatisch aus den Songs bestimmt, sobald Songs mit Genre da sind.');
+    $('aGenreList').innerHTML = ''; slGenresOfBand().forEach(g => $('aGenreList').appendChild(new Option(g)));
+  }
+  $('aGenre').addEventListener('input', () => { draftGenre = $('aGenre').value.trim().slice(0, 40); genreHint(); updateDirty(); });
   $('aBandName').addEventListener('input', () => { draftName = $('aBandName').value.trim(); const b = $('aTagEditor'); if (b._refresh) b._refresh(); updateDirty(); });
   [['aShowLogo', 'logo'], ['aShowName', 'name'], ['aShowTag', 'tag']].forEach(([id, k]) => $(id).addEventListener('change', () => { draftShow = { ...draftShow, [k]: $(id).checked }; updateDirty(); }));
 
@@ -3531,7 +3545,7 @@
     if (!draft.roles.length) return setMsg(msg, 'Es braucht mindestens eine Rolle.', 'error');
     if (newName !== band.name && wordBlocked(newName)) return setMsg(msg, 'Der Bandname enthält ein gesperrtes Wort.', 'error');
     const tagChanged = draftTag !== (band.tag || '');
-    const showChanged = JSON.stringify(draftShow) !== JSON.stringify(showOf(band));
+    const showChanged = JSON.stringify(draftShow) !== JSON.stringify(showOf(band)) || draftGenre !== (band.genre || '');
     if (tagChanged) {
       if (!TAG_RE.test(draftTag)) return setMsg(msg, 'Der Band-Tag braucht 1 bis 3 Zeichen (A–Z, 0–9).', 'error');
       const left = tagCooldownLeft(band);
@@ -3556,7 +3570,7 @@
       await db.doc(cfgPath(uid, band.id)).set(clone(cfg));
       if (newName !== band.name || tagChanged || showChanged) {
         const { id, cfg: _c, ...rest } = band;
-        await db.doc('bands/' + band.id).set({ ...rest, name: newName, tag: draftTag, tagAt: tagChanged ? now : (band.tagAt || null), tagAtMs: tagChanged ? Date.now() : (band.tagAtMs || 0), show: { ...draftShow } });
+        await db.doc('bands/' + band.id).set({ ...rest, name: newName, tag: draftTag, tagAt: tagChanged ? now : (band.tagAt || null), tagAtMs: tagChanged ? Date.now() : (band.tagAtMs || 0), show: { ...draftShow }, genre: draftGenre });
         const opt = [...$('bandSwitch').options].find(o => o.value === band.id);
         if (opt) opt.textContent = newName + ' (Admin)';
       }
@@ -5953,8 +5967,21 @@
         lu.forEach(x => {
           const r = el('button', 'lu-row' + (ttName(x).toLowerCase() === own ? ' own' : '')); r.type = 'button';
           r.append(el('span', 'lu-t', x.time + (x.end ? ' – ' + x.end : '')), el('span', 'lu-b', ttName(x)));
+          const sl = x.setlistId ? slLists.find(l => l.id === x.setlistId) : null;
+          if (sl) {
+            const pub = sl.vis === 'public', songs = (sl.items || []).filter(i => i.type === 'song');
+            const mayIntern = levelFor(currentBand, 'page6') !== 'hidden';
+            r.append(el('span', 'lu-v ' + (pub ? 'pub' : 'int'), pub ? '🌐 ' + songs.length + ' Songs' : '🔒 intern'));
+            if (pub || mayIntern) r.title = 'Setlist „' + (sl.name || '') + '“: ' + songs.map(i => i.title).join(', ');
+          }
           r.title = 'Zur Timetable'; r.addEventListener('click', e => { if (levelFor(currentBand, 'page8') === 'hidden') return previewBlocked(e, 'Keine Berechtigung: Die Registerkarte „Timetable“ ist für dich ausgeblendet.'); ttSel = ev.id; showPage('page8'); });
-          box.appendChild(r);
+          const other = Object.keys(bands).find(id => id !== currentBand && (bands[id].name || '').trim().toLowerCase() === ttName(x).toLowerCase());
+          if (other) {
+            const w = el('div', 'lu-wrap'), go = el('button', 'btn small ghost lu-go', '↗ Band öffnen'); go.type = 'button';
+            go.title = 'Zu „' + bands[other].name + '“ wechseln';
+            go.addEventListener('click', () => { $('bandSwitch').value = other; $('bandSwitch').dispatchEvent(new Event('change')); });
+            w.append(r, go); box.appendChild(w);
+          } else box.appendChild(r);
         });
         section('Line-up', lu.length === 1 ? '1 Band' : lu.length + ' Bands', box, false);
       }

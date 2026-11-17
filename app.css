@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.16 · Build 38 · 2026-11-17 */
+/*! Stagemate v0.4.20 · Build 42 · 2026-11-17 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1652,3 +1652,12 @@
 .lu-row { display: flex; gap: 12px; text-align: left; width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: inherit; cursor: pointer; }
 .lu-row.own { border-color: var(--accent); font-weight: 700; }
 .lu-t { min-width: 96px; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+/* v0.4.17 Line-up: Sichtbarkeit der Setlist */
+.lu-v { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.lu-v.pub { color: var(--accent); }
+
+/* v0.4.19 Line-up: Band öffnen */
+.lu-wrap { display: flex; gap: 8px; align-items: stretch; }
+.lu-wrap .lu-row { flex: 1; }
+.lu-go { white-space: nowrap; }

@@ -1,16 +1,28 @@
-/*! Stagemate v0.4.16 · Build 38 · 2026-11-17 */
+/*! Stagemate v0.4.20 · Build 42 · 2026-11-17 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.16';
-const APP_BUILD = 38;
+const APP_VERSION = 'v0.4.20';
+const APP_BUILD = 42;
 const APP_BUILD_DATE = '2026-11-17';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.20', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Neue Rollen „Setlist“ (Bearbeiten in Setlist und Songs) und „Timetable“ (Bearbeiten in der Timetable), wie die Rolle „Checkliste“. Für neue Bands in der Rollenliste; bestehende Bands fügen sie unter Verwaltung → Rollen hinzu.' }
+  ] },
+  { version: 'v0.4.19', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Gig-Line-up: Ist eine Band der Timetable auch eine deiner Bands in Stagemate (gleicher Name), erscheint daneben „↗ Band öffnen“ und wechselt zu dieser Band.' }
+  ] },
+  { version: 'v0.4.18', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Standard-Genre pro Band: Admin setzt es unter Verwaltung → Band (Vorschlagsliste aus den Songs). Ohne Eintrag zeigt die App das häufigste Genre der Songs als Hinweis. Neue Songs übernehmen das Genre der Band als Vorgabe.' }
+  ] },
+  { version: 'v0.4.17', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Setlist öffentlich/intern wirkt jetzt: Im Gig-Line-up zeigt eine Band mit verknüpfter Setlist „🌐 n Songs“ (öffentlich, Songnamen im Tooltip) oder „🔒 intern“ (Songnamen nur mit Zugriff auf das Register Setlist).' }
+  ] },
   { version: 'v0.4.16', date: '2026-11-17', items: [
     { type: 'neu', text: 'Entwicklerseite: Bands zeigen jetzt zusätzlich Songs, Setlists und Timetables (zusammen mit Mitgliedern und Termine).' }
   ] },
