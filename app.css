@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.25 · Build 47 · 2026-11-17 */
+/*! StageMate v0.4.42 · Build 64 · 2026-11-17 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1689,3 +1689,28 @@
 .hc-day { font-weight: 700; margin-bottom: 6px; }
 
 .ev-att { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 4px 0 8px; }
+
+/* v0.4.26 Mobil: Entwickler-Knopf und Wasserzeichen verdecken keinen Inhalt mehr am Seitenende */
+@media (max-width: 760px) {
+  .dev-btn { right: 60px; bottom: 6px; padding: 4px 10px; font-size: 11.5px; }
+  #app:not(.hidden), #auth:not(.hidden) { padding-bottom: 54px; }
+}
+
+/* v0.4.29 Ernährung */
+.food-det > summary { cursor: pointer; font-weight: 600; margin-bottom: 6px; }
+.food-box { display: grid; gap: 10px; margin: 8px 0; }
+.food-t { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+.food-grp { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.food-grp .food-t { width: 100%; }
+
+.cat-sugg { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.chip-btn { border: 1px solid var(--border); background: transparent; color: inherit; border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.chip-btn:hover { border-color: var(--accent); }
+
+/* v0.4.37: rote Meldung am oberen Rand (z. B. bei verbotenen Zeichen) */
+.top-alert { position: fixed; top: 0; left: 0; right: 0; z-index: 9999; background: var(--error); color: #fff; text-align: center; padding: 10px 16px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.25); transform: translateY(-110%); transition: transform .2s; pointer-events: none; }
+.top-alert.show { transform: translateY(0); }
+
+/* v0.4.40: Setlist-Ordner und Vorlagen */
+.sl-folder-h { grid-column: 1 / -1; font-weight: 700; font-size: 14px; margin: 10px 0 2px; color: var(--muted, #667); }
+#slFromTpl { max-width: 190px; }

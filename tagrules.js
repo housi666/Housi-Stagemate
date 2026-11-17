@@ -1,5 +1,5 @@
-/*! Stagemate v0.4.25 · Build 47 · 2026-11-17 */
-/* Stagemate – Regeln für den automatischen Band-Tag
+/*! StageMate v0.4.42 · Build 64 · 2026-11-17 */
+/* StageMate – Regeln für den automatischen Band-Tag
  * Diese Datei darfst du selbst anpassen (z.B. direkt auf GitHub bearbeiten).
  *
  * Ein Tag hat 1 bis 3 Zeichen, nur Grossbuchstaben A-Z und Ziffern 0-9.

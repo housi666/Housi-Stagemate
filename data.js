@@ -1,5 +1,5 @@
-/*! Stagemate v0.4.25 · Build 47 · 2026-11-17 */
-/* Stagemate – Datenschicht
+/*! StageMate v0.4.42 · Build 64 · 2026-11-17 */
+/* StageMate – Datenschicht
  * ------------------------------------------------------------
  * Die einzige Stelle, die weiss, WO die Daten liegen.
  * Die App spricht nur mit window.StagemateData und bekommt immer

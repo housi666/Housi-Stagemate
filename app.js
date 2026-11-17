@@ -1,15 +1,15 @@
-/*! Stagemate v0.4.25 · Build 47 · 2026-11-17 */
-/* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
+/*! StageMate v0.4.42 · Build 64 · 2026-11-17 */
+/* StageMate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
 
 (() => {
   const FIXED_ROLES = ['Gründer', 'Organisation', 'Checkliste'];   // immer vorhanden, können nicht entfernt werden
-  const ROLE_REGS = { 'Checkliste': ['page4'], 'Setlist': ['page6', 'page7'], 'Timetable': ['page8'] };   // Rolle schaltet „Bearbeiten“ im Register frei
+  const ROLE_REGS = { 'Checkliste': ['page4'], 'Setlist': ['page6', 'page7'], 'Timetable': ['page8'], 'Finanzen': ['page5'] };   // Rolle schaltet „Bearbeiten“ im Register frei
   const CL_ROLE = 'Checkliste';   // schaltet „Bearbeiten“ in der Registerkarte „Checkliste“ frei
   const ROLE_RENAMES = { 'Management': 'Organisation', 'Verwaltung': 'Organisation' };
   const renameRoles = list => Array.isArray(list) ? [...new Set(list.map(r => ROLE_RENAMES[r] || r))] : list;
-  const DEFAULT_ROLES = ['Gründer', 'Gesang', 'Backing Vocals', 'Gitarre', 'Bass', 'Schlagzeug', 'Percussion', 'Keyboard', 'Bläser', 'Technik', 'Organisation', 'Checkliste', 'Setlist', 'Timetable'];
+  const DEFAULT_ROLES = ['Gründer', 'Gesang', 'Backing Vocals', 'Gitarre', 'Bass', 'Schlagzeug', 'Percussion', 'Keyboard', 'Bläser', 'Technik', 'Organisation', 'Checkliste', 'Setlist', 'Timetable', 'Finanzen'];
   // Register, deren Sichtbarkeit/Berechtigung der Admin steuert
   const REGISTERS = [
     { id: 'page2', title: 'Kalender' },
@@ -295,6 +295,10 @@
   // members/<uid>   öffentlich für angemeldete Benutzer (Nickname, Name, Bands …)
   // contacts/<uid>  E-Mail und Telefon – nur die Person selbst und Mitglieder gemeinsamer Bands
   let lastContact = null, lastPrivate = null;
+  // Ernährung & Allergien (freiwillig): in contacts/<uid> unter „food“ – nur mit Haken „für meine Bands sichtbar“ in der Zusammenfassung
+  const FOOD_DIETS = ['vegetarisch', 'vegan', 'ohne Schweinefleisch', 'laktosefrei', 'glutenfrei'];
+  const FOOD_ALLERGENS = ['Glutenhaltiges Getreide', 'Krebstiere', 'Eier', 'Fisch', 'Erdnüsse', 'Soja', 'Milch (inkl. Laktose)', 'Schalenfrüchte (Nüsse)', 'Sellerie', 'Senf', 'Sesam', 'Schwefeldioxid und Sulfite', 'Lupinen', 'Weichtiere'];
+  const foodKey = f => JSON.stringify(f || null);
   function withContacts(base) {
     return {
       collection: p => base.collection(p),
@@ -306,7 +310,7 @@
           id: ref.id, path: ref.path,
           get: () => ref.get(),
           async set(d) {
-            const rest = { ...d }; delete rest.email; delete rest.phone; delete rest._migrateContact;
+            const rest = { ...d }; delete rest.email; delete rest.phone; delete rest.food; delete rest._migrateContact;
             // Verborgenes Profilbild: nur im privaten Dokument der Person speichern
             if (d.photoPublic === false) {
               delete rest.photo;
@@ -316,8 +320,8 @@
               }
             }
             await ref.set(rest);
-            if (m[1] === uid && ('email' in d || 'phone' in d)) {
-              const c = { email: d.email || '', phone: d.phone || '' };
+            if (m[1] === uid && ('email' in d || 'phone' in d || 'food' in d)) {
+              const c = { email: d.email || '', phone: d.phone || '', food: d.food || null };
               const key = JSON.stringify(c);
               if (key !== lastContact) { await base.doc('contacts/' + m[1]).set({ ...c, updatedAt: new Date().toISOString() }); lastContact = key; }
             }
@@ -338,13 +342,29 @@
     if (!p) return p;
     try {
       const c = await db.doc('contacts/' + uid).get();
-      if (c.exists) { const d = c.data(); p.email = d.email || ''; p.phone = d.phone || ''; lastContact = JSON.stringify({ email: p.email, phone: p.phone }); }
+      if (c.exists) { const d = c.data(); p.email = d.email || ''; p.phone = d.phone || ''; p.food = d.food || null; lastContact = JSON.stringify({ email: p.email, phone: p.phone, food: p.food || null }); }
       else if (p.email || p.phone) p._migrateContact = true;   // ältere Profile: Kontakt noch im öffentlichen Dokument
     } catch (e) {}
     if (p.photoPublic === false) {
       try { const pr = await db.doc('private/' + uid).get(); if (pr.exists) { p.photo = pr.data().photo || null; lastPrivate = p.photo || ''; } } catch (e) {}
     }
     return p;
+  }
+  function foodBuild() {
+    const box = $('fFood'); if (!box || box.childElementCount) return;
+    const grp = (title, arr, cls) => { const g = el('div', 'food-grp'); g.append(el('div', 'food-t', title)); arr.forEach(v => { const lb = el('label', 'hc-opt'), cb = el('input'); cb.type = 'checkbox'; cb.value = v; cb.className = cls; lb.append(cb, v); g.append(lb); }); box.append(g); };
+    grp('Ernährung', FOOD_DIETS, 'fd-diet'); grp('Allergien und Unverträglichkeiten', FOOD_ALLERGENS, 'fd-all');
+  }
+  function foodFill(f) {
+    foodBuild(); f = f || {};
+    document.querySelectorAll('#fFood .fd-diet').forEach(c => { c.checked = (f.diet || []).includes(c.value); });
+    document.querySelectorAll('#fFood .fd-all').forEach(c => { c.checked = (f.allergens || []).includes(c.value); });
+    $('fFoodNote').value = f.note || ''; $('fFoodShare').checked = !!f.share;
+  }
+  function foodRead() {
+    const diet = [...document.querySelectorAll('#fFood .fd-diet:checked')].map(c => c.value), allergens = [...document.querySelectorAll('#fFood .fd-all:checked')].map(c => c.value);
+    const note = ($('fFoodNote').value || '').trim().slice(0, 200), share = $('fFoodShare').checked;
+    return diet.length || allergens.length || note ? { diet, allergens, note, share } : null;
   }
   function genCode() {
     const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -581,7 +601,7 @@
     Object.keys(editRoles).sort().forEach(k => { roles[k] = [...editRoles[k]].sort(); });
     const code = $('fCode').value.trim(), bname = $('fBandName').value.trim();
     const nb = newBandMode !== 'none' && (code || bname || newRoles.size) ? [newBandMode, code, bname, [...newRoles].sort().join(',')].join('|') : '';
-    return JSON.stringify({ n: $('fName').value.trim(), fn: $('fFirst').value.trim(), ln: $('fLast').value.trim(), t: $('fTerms').checked, e: $('fEmail').value.trim(), p: $('fPhone').value.trim(), ph: currentPhoto() || null, r: roles, nb });
+    return JSON.stringify({ n: $('fName').value.trim(), fn: $('fFirst').value.trim(), ln: $('fLast').value.trim(), t: $('fTerms').checked, e: $('fEmail').value.trim(), p: $('fPhone').value.trim(), fd: foodRead(), ph: currentPhoto() || null, r: roles, nb });
   }
   const isProfileDirty = () => !!profile && !!profileSnap && !$('app').classList.contains('hidden') && profileState() !== profileSnap;
   ['input', 'change', 'click'].forEach(ev => form.addEventListener(ev, () => setTimeout(updateDirty, 0)));
@@ -600,7 +620,7 @@
     regTag = ''; mountRegTag();
     $('puidRow').classList.toggle('hidden', !(profile && profile.puid));
     $('puidVal').textContent = (profile && profile.puid) || ''; $('puidVal').classList.add('hidden'); $('puidBtn').textContent = 'PUID anzeigen';
-    $('fPhone').value = profile?.phone || '';
+    $('fPhone').value = profile?.phone || ''; foodFill(profile && profile.food);
     photoDraft = undefined; setMsg($('photoMsg'), ''); renderPhoto();
     $('fCode').value = ''; $('fBandName').value = '';
     joinBand = null; joinEntry = null;
@@ -715,7 +735,7 @@
       if (!p.puid) p.puid = await newPuid();
       p.nickKey = nickKey(name);
       if (p.photoPublic === undefined) p.photoPublic = true;
-      p.name = name; p.firstName = firstName; p.lastName = lastName; p.email = email; p.phone = phone; p.updatedAt = now;
+      p.name = name; p.firstName = firstName; p.lastName = lastName; p.email = email; p.phone = phone; p.food = foodRead(); p.updatedAt = now;
       if (acceptTerms) p.terms = { version: LEGAL_VERSION, acceptedAt: now };
       if (photoDraft !== undefined) { if (photoDraft) p.photo = photoDraft; else delete p.photo; }
       p.bandIds = bandIdsOf(p);
@@ -1121,7 +1141,7 @@
     $('page-checklist').classList.toggle('hidden', page !== 'page4');
     if (page === 'page4') renderChecklistPage();
     $('page-finance').classList.toggle('hidden', page !== 'page5');
-    if (page === 'page5') { openFinance(); $('buildModal').classList.remove('hidden'); }
+    if (page === 'page5') openFinance();
     $('page-setlist').classList.toggle('hidden', page !== 'page6');
     if (page === 'page6') openSetlist();
     $('page-songs').classList.toggle('hidden', page !== 'page7');
@@ -1159,7 +1179,7 @@
     }
   }
   // ----- Persönliche Übersicht: Anzeigen (Widgets), je ein Drittel breit, verschiebbar (animiert) -----
-  const HUB_DEFAULT = ['bands', 'quick', 'nextgig', 'agenda', 'mycal', 'tasks', 'profile', 'settings'];
+  const HUB_DEFAULT = ['bands', 'quick', 'nextgig', 'agenda', 'events', 'mycal', 'tasks', 'profile', 'settings'];
   let hubOrder = HUB_DEFAULT.slice();
   try {
     const sv = JSON.parse(ls.get('hubLayout') || 'null');
@@ -1368,6 +1388,27 @@
 
   // ---- Mein Kalender (Startbildschirm): eigene Termine, zugeteilte Checklisten-Punkte, optional Band-Termine
   // Eigene Termine: private/<uid>/events/<id> { title, date, start, end, note }
+  let hubEvPast = false;
+  document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('#hubEvUp, #hubEvPast'); if (!t) return; hubEvPast = t.id === 'hubEvPast'; hubEvRender(); });
+  function hubEvRender() {
+    const box = $('hubEvList'); if (!box) return;
+    box.innerHTML = ''; const today = dOnly(new Date()), c = ovCfg(), list = [];
+    Object.entries(hubRaw).forEach(([bid, evs]) => evs.forEach(ev => {
+      if (!ev.date || ev.kind === 'checklist' || ev.category !== 'auftritt') return;
+      (hubEvPast ? occurrences(ev, addDays(today, -730), addDays(today, -1)) : occurrences(ev, today, addDays(today, 730))).forEach(dt => list.push({ band: bid, ev, date: dt }));
+    }));
+    list.sort((a, b) => (hubEvPast ? b.date - a.date : a.date - b.date) || (a.ev.start || '').localeCompare(b.ev.start || ''));
+    $('hubEvUp').classList.toggle('ghost', hubEvPast); $('hubEvPast').classList.toggle('ghost', !hubEvPast);
+    if (!list.length) box.append(el('div', 'mnote', hubEvPast ? 'Keine vergangenen Veranstaltungen.' : 'Keine kommenden Veranstaltungen.'));
+    list.slice(0, 30).forEach(x => {
+      const row = el('button', 'ag-row'); row.type = 'button';
+      const b = bands[x.band], wrap = el('span', 'ag-band'); wrap.append(b ? b.name : 'Band');
+      const t = el('span', 'ag-what'); t.append(el('b', null, '🎤 ' + (x.ev.title || 'Gig'))); if (x.ev.location) t.append(el('small', null, ' · ' + x.ev.location));
+      row.append(el('span', 'ag-when', fmtDateOv(x.date, c.date) + (x.ev.allDay || !x.ev.start ? '' : ' · ' + fmtHHMM(x.ev.start, c.time))), t, wrap);
+      row.addEventListener('click', () => { currentPage = 'page3'; gigsOpen.add(x.ev.id + '|' + dKey(x.date)); enterApp(x.band); setTimeout(() => scrollToCard('gigList', x.ev.id + '|' + dKey(x.date)), 300); });
+      box.append(row);
+    });
+  }
   let hubRaw = {}, hubPers = [], hubCalM = null, hubCalSel = null;
   const hubCalOpt = k => { try { return ls.get('hubCal_' + k) === '1'; } catch (e) { return false; } };
   const hubCalSet = (k, v) => { try { ls.set('hubCal_' + k, v ? '1' : '0'); } catch (e) {} };
@@ -1397,12 +1438,22 @@
     md.append(el('h3', null, x ? 'Eigenen Termin bearbeiten' : 'Eigener Termin'));
     const t = f('Titel', 'text', x && x.title), d = f('Datum', 'date', (x && x.date) || dateKey), a = f('Beginn (optional)', 'time', x && x.start), b = f('Ende (optional)', 'time', x && x.end), n = f('Notiz (optional)', 'text', x && x.note);
     t.maxLength = 80; n.maxLength = 300;
+    // Verknüpfung mit Band und Band-Termin (optional)
+    const sel = (lbl) => { const w = el('div', 'field'), i = el('select'); w.append(el('label', null, lbl), i); md.append(w); return i; };
+    const sb = sel('Mit Band verknüpfen (optional)'), se = sel('Mit Termin der Band verknüpfen (optional)');
+    sb.append(new Option('– keine –', '')); Object.keys(bands).forEach(id => sb.append(new Option(bands[id].name || 'Band', id)));
+    const fillEv = () => {
+      se.innerHTML = ''; se.append(new Option('– keiner –', '')); const bid = sb.value; se.disabled = !bid;
+      (hubRaw[bid] || []).filter(e => e.date && e.kind !== 'checklist').sort((p, q) => (q.date || '').localeCompare(p.date || '')).slice(0, 60)
+        .forEach(e => se.append(new Option(`${e.date.split('-').reverse().join('.')} · ${e.title || 'Termin'}${e.category === 'auftritt' ? ' (Gig)' : ''}`, e.id)));
+    };
+    sb.value = x && bands[x.bandId] ? x.bandId : ''; fillEv(); se.value = x && x.evId ? x.evId : ''; sb.addEventListener('change', fillEv);
     const msg = el('div', 'msg'), row = el('div', 'modal-actions'), ok = el('button', 'btn', 'Speichern'), no = el('button', 'btn ghost', 'Abbrechen'), del = el('button', 'btn ghost', 'Löschen'); ok.type = no.type = del.type = 'button';
     row.append(ok, no); if (x) row.append(del); md.append(msg, row); bg.append(md); document.body.appendChild(bg); t.focus();
     no.addEventListener('click', () => bg.remove());
     ok.addEventListener('click', async () => {
       if (!t.value.trim() || !d.value) { msg.textContent = 'Titel und Datum sind nötig.'; msg.className = 'msg error'; return; }
-      const data = { title: t.value.trim(), date: d.value, start: a.value || '', end: b.value || '', note: n.value.trim(), updatedAt: new Date().toISOString() };
+      const data = { title: t.value.trim(), date: d.value, start: a.value || '', end: b.value || '', note: n.value.trim(), bandId: sb.value || '', evId: sb.value ? (se.value || '') : '', updatedAt: new Date().toISOString() };
       try {
         const ref = x ? db.collection(`private/${uid}/events`).doc(x.id) : db.collection(`private/${uid}/events`).doc();
         await ref.set(data);
@@ -1447,6 +1498,12 @@
         const w = el('span', 'ag-what'); w.append(el('b', null, (it.kind === 'pers' ? '👤 ' : it.kind === 'task' ? '☑️ ' : it.gig ? '🎤 ' : '📅 ') + it.title)); if (it.sub) w.append(el('small', null, ' · ' + it.sub));
         r.append(el('span', 'ag-when', it.time ? fmtHHMM(it.time, c.time) : 'ganztägig'), w);
         if (it.band && bands[it.band]) { const bl = el('span', 'ag-band'); bl.append(bands[it.band].name); r.append(bl); }
+        if (it.kind === 'pers' && it.ev && it.ev.bandId && bands[it.ev.bandId]) {
+          const lev = it.ev.evId && (hubRaw[it.ev.bandId] || []).find(e => e.id === it.ev.evId);
+          const lk = el('span', 'ag-band', '↗ ' + bands[it.ev.bandId].name + (lev ? ': ' + (lev.title || 'Termin') : '')); lk.title = lev ? 'Zum verknüpften Termin' : 'Zur Band';
+          lk.addEventListener('click', e => { e.stopPropagation(); currentPage = lev && lev.category === 'auftritt' ? 'page3' : (lev ? 'page2' : 'overview'); if (lev && lev.category === 'auftritt') gigsOpen.add(lev.id + '|' + lev.date); enterApp(it.ev.bandId); });
+          r.append(lk);
+        }
         r.addEventListener('click', () => {
           if (it.kind === 'pers') return hubPersEdit(it.ev);
           if (it.kind === 'task') { currentPage = 'page4'; return enterApp(it.band); }
@@ -1485,15 +1542,19 @@
         });
       } catch (e) {}
     }));
-    hubCalLoad();
+    hubCalLoad(); hubEvRender();
     const c = ovCfg();
     const bandLabel = id => { const b = bands[id], wrap = el('span', 'ag-band'); wrap.append(b ? b.name : 'Band'); if (b && b.tag && showOf(b).tag) wrap.append(tagChip(b.tag)); return wrap; };
+    { const now = Date.now(), p2 = n => String(n).padStart(2, '0');
+      const gone = x => { if (x.ev.allDay) return false; const e = x.ev.end || x.ev.start; if (!e) return false; const d = x.date; return new Date(`${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${e}:00`).getTime() < now; };
+      for (let i = events.length - 1; i >= 0; i--) if (gone(events[i])) events.splice(i, 1);
+      for (let i = gigs.length - 1; i >= 0; i--) if (gone(gigs[i])) gigs.splice(i, 1); }
     events.sort((a, b) => a.date - b.date || (a.ev.start || '').localeCompare(b.ev.start || ''));
     gigs.sort((a, b) => a.date - b.date || (a.ev.start || '').localeCompare(b.ev.start || ''));
     renderNextGig(gigs[0], bandLabel);
     ag.innerHTML = '';
-    if (!events.length) ag.append(el('div', 'mnote', 'Keine Termine in den nächsten 60 Tagen.'));
-    events.slice(0, 40).forEach(x => {
+    if (!events.length) ag.append(el('div', 'mnote', 'Keine anstehenden Termine.'));
+    events.slice(0, 3).forEach(x => {
       const row = el('button', 'ag-row'); row.type = 'button';
       const isGig = x.ev.category === 'auftritt';
       row.append(el('span', 'ag-when', fmtDateOv(x.date, c.date) + (x.ev.allDay ? '' : ' · ' + fmtHHMM(x.ev.start, c.time))),
@@ -1530,7 +1591,7 @@
     ls.sset('bandLoggedIn', '1'); ls.sset('smView', 'hub');
     $('auth').classList.add('hidden');
     $('app').classList.remove('hidden'); $('app').classList.add('hub-mode');
-    const bn = $('brandName'); bn.innerHTML = ''; bn.append('Stagemate');
+    const bn = $('brandName'); bn.innerHTML = ''; bn.append('StageMate');
     $('brandSub').textContent = 'Startbildschirm';
     const lg = $('brandLogo'); lg.innerHTML = ''; lg.className = 'brand-logo'; lg.onclick = null; lg.appendChild(defaultLogo());
     { const hl = $('hubLogo'); hl.innerHTML = ''; hl.appendChild(defaultLogo()); }
@@ -1562,10 +1623,19 @@
   setInterval(tickSideClock, 1000);
 
   // ================= Online-Status =================
-  // presence/<uid> { online, since, lastSeen } – alle 60 s aktualisiert, solange Stagemate offen ist
-  const PRES_TTL = 150000;
+  // presence/<uid> { online, since, lastSeen } – alle 60 s aktualisiert, solange StageMate offen ist
+  const PRES_TTL = 400000, PRES_EVERY = 180000;
   let presSince = Date.now(), presTimer = null, lastBeat = 0;
   const presCache = {}, bandMembersCache = {};
+  async function loadBandMembers(bid, force) {
+    if (force || !bandMembersCache[bid]) {
+      try {
+        const q = await db.collection('members').where('bandIds', 'array-contains', bid).get();
+        bandMembersCache[bid] = q.docs.map(d => ({ uid: d.id, ...d.data() })).filter(m => isActiveIn(m, bid, bands[bid].cfg));
+      } catch (e) {}
+    }
+    return bandMembersCache[bid] || [];
+  }
   // Eigener Status: auto (Übersicht = Privat, Bandseite = Online) | online | private | offline
   let myStatus = ls.get('myStatus') || 'auto', offSince = Date.now();
   const effStatus = () => myStatus === 'auto' ? (inHub ? 'private' : 'online') : myStatus;
@@ -1599,7 +1669,7 @@
     flash('Dein Status: ' + ST_TXT[effStatus()]);
   }));
   function startPresence() {
-    if (!presTimer) { presSince = Date.now(); beat(); presTimer = setInterval(() => { if (!document.hidden) { beat(); refreshOnline(); } }, 60000); }
+    if (!presTimer) { presSince = Date.now(); beat(); presTimer = setInterval(() => { if (!document.hidden) { beat(); refreshOnline(); } }, PRES_EVERY); }
     else beat();   // Wechsel Startbildschirm <-> Band sofort melden (Privat / Online)
     refreshOnline();
   }
@@ -1616,10 +1686,7 @@
     if (!currentBand || inHub || !bands[currentBand]) return renderOnline();
     const bid = currentBand;
     try {
-      if (force || !bandMembersCache[bid]) {
-        const q = await db.collection('members').where('bandIds', 'array-contains', bid).get();
-        bandMembersCache[bid] = q.docs.map(d => ({ uid: d.id, ...d.data() })).filter(m => isActiveIn(m, bid, bands[bid].cfg));
-      }
+      await loadBandMembers(bid, force);
       await Promise.all(bandMembersCache[bid].map(async m => {
         if (m.uid === uid) { const eff = effStatus(); presCache[uid] = { online: eff !== 'offline', private: eff === 'private', since: presSince, lastSeen: eff === 'offline' ? offSince : Date.now() }; return; }
         try { const s = await db.doc('presence/' + m.uid).get(); presCache[m.uid] = s.exists ? s.data() : null; } catch (e) {}
@@ -2471,6 +2538,7 @@
   const SL_REL = { album: 'Album', ep: 'EP', single: 'Single' };
   const SL_GENRES = ['Rock', 'Pop', 'Punk', 'Metal', 'Blues', 'Jazz', 'Folk', 'Funk', 'Soul', 'Reggae', 'Country', 'Hip-Hop', 'Electronic', 'Schlager', 'Klassik'];
   let slJump = null, slPend = null, slLists = [], slSongs = [], slBand = null, slUnsubL = null, slUnsubS = null, slSel = null, slView = 'list', slCtx = null, slSaveT = null;
+  let slFolderSel = '*';
   let slSort = { by: 'name', dir: 1 }, songSort = { by: 'title', dir: 1 };
   try { const v = JSON.parse(ls.get('slSort') || 'null'); if (v && v.by) slSort = v; const w = JSON.parse(ls.get('songSort') || 'null'); if (w && w.by) songSort = w; } catch (e) {}
   const slCan = () => levelFor(currentBand, 'page6') === 'edit' && !viewAs;
@@ -2573,16 +2641,30 @@
     $('slSortBy').value = slSort.by; $('slSortDir').textContent = slSort.dir > 0 ? '↑ aufsteigend' : '↓ absteigend';
     const gd = L => { const g = gigs.find(e => e.id === L.gigId); return g ? g.date : ''; };
     const key = { name: L => (L.name || '').toLowerCase(), gig: L => gd(L) || '￿', dur: L => slTot(L).t, songs: L => slTot(L).n, upd: L => L.updatedAt || '' }[slSort.by];
-    const list = slLists.slice().sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * slSort.dir || (a.name || '').localeCompare(b.name || '', 'de'); });
+    const folders = [...new Set(slLists.map(L => (L.folder || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+    const ff = $('slFolderFilter'), fcur = slFolderSel;
+    ff.innerHTML = ''; ff.appendChild(new Option('Alle Setlists', '*')); folders.forEach(f => ff.appendChild(new Option('📁 ' + f, 'f:' + f)));
+    if (slLists.some(L => !(L.folder || '').trim() && folders.length)) ff.appendChild(new Option('Ohne Ordner', '-'));
+    if (slLists.some(L => L.tpl)) ff.appendChild(new Option('📋 Nur Vorlagen', 'tpl'));
+    ff.value = [...ff.options].some(o => o.value === fcur) ? fcur : '*'; slFolderSel = ff.value;
+    $('slFolderBar').classList.toggle('hidden', !(folders.length || slLists.some(L => L.tpl)));
+    const tpls = slLists.filter(L => L.tpl), ft = $('slFromTpl');
+    ft.innerHTML = ''; ft.appendChild(new Option('+ Aus Vorlage …', '')); tpls.forEach(L => ft.appendChild(new Option(L.name || 'Vorlage', L.id))); ft.classList.toggle('hidden', !tpls.length);
+    const inFilter = L => slFolderSel === '*' || (slFolderSel === '-' ? !(L.folder || '').trim() : slFolderSel === 'tpl' ? !!L.tpl : (L.folder || '').trim() === slFolderSel.slice(2));
+    const list = slLists.filter(inFilter).sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * slSort.dir || (a.name || '').localeCompare(b.name || '', 'de'); });
     $('slEmpty').classList.toggle('hidden', !!slLists.length); $('slSortBar').classList.toggle('hidden', !slLists.length);
     const box = $('slCards'); box.innerHTML = '';
+    let lastFolder = null;
     list.forEach(L => {
+      const fo = (L.folder || '').trim();
+      if (slFolderSel === '*' && folders.length && fo !== lastFolder) { lastFolder = fo; const hd = el('div', 'sl-folder-h', fo ? '📁 ' + fo : 'Ohne Ordner'); box.appendChild(hd); }
       const c = el('button', 'sl-card'); c.type = 'button';
       const g = gigs.find(e => e.id === L.gigId), T = slTot(L), di = slDupInfo(L);
       c.append(el('div', 'slc-name', L.name || 'Ohne Namen'),
         el('div', 'slc-gig', g ? `🎤 ${g.title || 'Gig'} · ${fmtDateOv(parseKey(g.date), ovCfg().date)}` : 'Kein Gig zugewiesen'),
         el('div', 'slc-meta', `${T.n} ${T.n === 1 ? 'Song' : 'Songs'} · Gesamt ${slFmt(T.t)}${L.targetMin ? ' · Soll ' + L.targetMin + ' Min.' : ''}`));
       c.append(el('div', 'slc-vis ' + (L.vis === 'public' ? 'pub' : 'int'), L.vis === 'public' ? '🌐 Öffentlich' : '🔒 Intern'));
+      if (L.tpl) c.append(el('div', 'slc-vis', '📋 Vorlage'));
       if (di.active) c.append(el('div', 'slc-warn', '⚠ Doppelte Titel'));
       c.addEventListener('click', () => { slSel = L.id; slView = 'edit'; try { ls.set('slSel_' + currentBand, slSel); } catch (e) {} renderSetlist(); window.scrollTo(0, 0); });
       box.appendChild(c);
@@ -2593,7 +2675,9 @@
     ['slDup', 'slDel'].forEach(id => $(id).classList.toggle('pv-locked', !can));
     $('slName').value = L.name || ''; $('slStart').value = L.start || ''; $('slTarget').value = L.targetMin || '';
     $('slVis').value = L.vis === 'public' ? 'public' : 'intern';
-    ['slName', 'slStart', 'slTarget', 'slGig', 'slVis'].forEach(id => { $(id).disabled = !can; });
+    $('slFolder').value = L.folder || ''; $('slTpl').checked = !!L.tpl;
+    { const dl = $('slFolderList'); dl.innerHTML = ''; [...new Set(slLists.map(x => (x.folder || '').trim()).filter(Boolean))].forEach(f => dl.appendChild(new Option(f))); }
+    ['slName', 'slStart', 'slTarget', 'slGig', 'slVis', 'slFolder', 'slTpl'].forEach(id => { $(id).disabled = !can; });
     const g = $('slGig'); g.innerHTML = ''; g.appendChild(new Option('– kein Gig –', ''));
     slGigs().forEach(e => g.appendChild(new Option(`${fmtDateOv(parseKey(e.date), ovCfg().date)} · ${e.title || 'Gig'}`, e.id)));
     if (L.gigId && !slGigs().some(e => e.id === L.gigId)) g.appendChild(new Option('(Gig nicht mehr vorhanden)', L.gigId));
@@ -2647,11 +2731,11 @@
       document.addEventListener('pointermove', move, { passive: false }); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
     });
   }
-  async function slNewList(copyFrom) {
+  async function slNewList(copyFrom, fromTpl) {
     if (!slCan()) return slDeny();
     const ref = db.collection(`setlists/${currentBand}/lists`).doc();
     const base = copyFrom ? clone(copyFrom) : { name: 'Neue Setlist', gigId: '', start: '', targetMin: 0, vis: 'intern', items: [] };
-    delete base.id; if (copyFrom) { base.name = (copyFrom.name || 'Setlist') + ' (Kopie)'; base.gigId = ''; base.dupAck = ''; base.items = base.items.map(x => ({ ...x, id: slId() })); }
+    delete base.id; if (copyFrom) { base.name = fromTpl ? (copyFrom.name || 'Setlist').replace(/\s*\(?Vorlage\)?\s*$/i, '').trim() || 'Neue Setlist' : (copyFrom.name || 'Setlist') + ' (Kopie)'; base.tpl = false; base.gigId = ''; base.dupAck = ''; base.items = base.items.map(x => ({ ...x, id: slId() })); }
     base.createdBy = uid; base.updatedAt = new Date().toISOString();
     slLists.push({ id: ref.id, ...base }); slSel = ref.id; slView = 'edit'; try { ls.set('slSel_' + currentBand, slSel); } catch (e) {}
     renderSetlist(); if (!copyFrom) { $('slName').focus(); $('slName').select(); }
@@ -2673,6 +2757,10 @@
   slField('slName', (L, v) => { L.name = v; });
   slField('slStart', (L, v) => { L.start = v; });
   slField('slTarget', (L, v) => { L.targetMin = Math.max(0, parseInt(v, 10) || 0); });
+  $('slFolder').addEventListener('change', () => { const L = slCur(); if (!L || !slCan()) return; L.folder = $('slFolder').value.trim().slice(0, 40); slSave(L); renderSetlist(); });
+  $('slTpl').addEventListener('change', () => { const L = slCur(); if (!L || !slCan()) return; L.tpl = $('slTpl').checked; slSave(L); renderSetlist(); flash(L.tpl ? 'Als Vorlage markiert' : 'Vorlage aufgehoben'); });
+  $('slFolderFilter').addEventListener('change', () => { slFolderSel = $('slFolderFilter').value; renderSlList(); });
+  $('slFromTpl').addEventListener('change', () => { const t = slLists.find(x => x.id === $('slFromTpl').value); $('slFromTpl').value = ''; if (t) slNewList(t, true); });
   $('slVis').addEventListener('change', () => { const L = slCur(); if (!L || !slCan()) return; L.vis = $('slVis').value === 'public' ? 'public' : 'intern'; slSave(L); renderSetlist(); });
   $('slGig').addEventListener('change', () => { const L = slCur(); if (!L || !slCan()) return; L.gigId = $('slGig').value; const e = calEvents.find(x => x.id === L.gigId); if (e && !L.start && e.start) L.start = e.start; slSave(L); renderSetlist(); });
   // Element bearbeiten / hinzufügen (Setlist) oder Song bearbeiten (Seite Songs)
@@ -2841,23 +2929,108 @@
     draw();
   }
   $('slStage').addEventListener('click', slStage);
-  // Import: JSON-Datei (Export aus Stagemate) als neue Setlist
+  // Import: JSON-Datei (Export aus StageMate) als neue Setlist
   $('slImport').addEventListener('click', () => slCan() ? $('slImportFile').click() : slDeny());
   $('slImportFile').addEventListener('change', async e => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     try {
       const o = JSON.parse(await f.text());
       if (!o || !Array.isArray(o.items)) throw new Error('format');
-      const items = o.items.filter(i => i && typeof i === 'object').slice(0, 300).map(i => ({ ...i, id: slId(), type: SL_TYPES[i.type] ? i.type : 'song', title: String(i.title || '').slice(0, 120) }));
+      const items = o.items.filter(i => i && typeof i === 'object').slice(0, 300).map(i => ({ ...i, id: slId(), type: SL_TYPES[i.type] ? i.type : 'song', title: cleanText(i.title).slice(0, 120), artist: cleanText(i.artist).slice(0, 120), note: cleanText(i.note).slice(0, 300) }));
       const nm = String(o.name || 'Import').slice(0, 80);
       await slNewList({ name: nm, gigId: '', start: /^\d\d:\d\d$/.test(o.start || '') ? o.start : '', targetMin: +o.targetMin || 0, vis: 'intern', items });
       const L = slCur(); if (L) { L.name = nm + ' (Import)'; slSave(L); renderSetlist(); }
       flash('Setlist importiert ✓');
-    } catch (err) { flash('Datei konnte nicht gelesen werden (kein Stagemate-JSON)', true); }
+    } catch (err) { flash('Datei konnte nicht gelesen werden (kein StageMate-JSON)', true); }
   });
+  // ==DOCX-PDF-START  Word- und PDF-Datei ohne Fremdbibliothek (Zip ohne Kompression, einfaches PDF)
+  const crcT = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = u8 => { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = crcT[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  function zipStore(files) {   // files: [{ name, data: string (UTF-8) }]
+    const enc = new TextEncoder(), parts = [], cen = []; let off = 0;
+    const u16 = v => [v & 255, v >> 8 & 255], u32 = v => [v & 255, v >> 8 & 255, v >> 16 & 255, v >>> 24 & 255];
+    files.forEach(f => {
+      const nm = enc.encode(f.name), d = enc.encode(f.data), crc = crc32(d);
+      const lh = Uint8Array.from([0x50, 0x4B, 3, 4, ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(d.length), ...u32(d.length), ...u16(nm.length), ...u16(0)]);
+      parts.push(lh, nm, d);
+      cen.push(Uint8Array.from([0x50, 0x4B, 1, 2, ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(d.length), ...u32(d.length), ...u16(nm.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(off)]), nm);
+      off += lh.length + nm.length + d.length;
+    });
+    const cLen = cen.reduce((a, b) => a + b.length, 0);
+    const end = Uint8Array.from([0x50, 0x4B, 5, 6, ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(cLen), ...u32(off), ...u16(0)]);
+    return new Blob([...parts, ...cen, end], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  }
+  const xmlEsc = v => String(v == null ? '' : v).normalize('NFC').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+  // doc = { title, sub, rows: [{ num, clock, title, artist, dur, key, note, special }] }
+  function buildDocx(doc) {
+    const run = (t, o = {}) => `<w:r><w:rPr>${o.b ? '<w:b/>' : ''}${o.i ? '<w:i/>' : ''}${o.color ? `<w:color w:val="${o.color}"/>` : ''}<w:sz w:val="${o.sz || 22}"/></w:rPr><w:t xml:space="preserve">${xmlEsc(t)}</w:t></w:r>`;
+    const cell = (w, inner, bd) => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${bd ? '<w:tcBorders><w:bottom w:val="single" w:sz="4" w:color="BBBBBB"/></w:tcBorders>' : ''}</w:tcPr><w:p>${inner}</w:p></w:tc>`;
+    const W = [600, 800, 4200, 800, 1500, 2000];
+    const head = ['Nr', 'Zeit', 'Titel', 'Länge', 'Tonart', 'Notiz'];
+    const tr = (cells, bd) => `<w:tr>${cells.map((c, i) => cell(W[i], c, bd)).join('')}</w:tr>`;
+    const rows = [tr(head.map(h => run(h, { b: 1, sz: 20 })), true)].concat(doc.rows.map(r => tr([
+      run(r.num ? r.num + '.' : '', { b: 1, sz: 24 }), run(r.clock || '', { color: '666666', sz: 20 }),
+      run(r.title, { b: !r.special, i: r.special }) + (r.artist ? run('  – ' + r.artist, { color: '666666', sz: 20 }) : ''),
+      run(r.dur || '', { sz: 20 }), run(r.key || '', { sz: 20 }), run(r.note || '', { color: '666666', sz: 20 })], true)));
+    const body = `<w:p><w:pPr><w:spacing w:after="60"/></w:pPr>${run(doc.title, { b: 1, sz: 40 })}</w:p><w:p><w:pPr><w:spacing w:after="200"/></w:pPr>${run(doc.sub, { color: '666666', sz: 22 })}</w:p>` +
+      `<w:tbl><w:tblPr><w:tblW w:w="${W.reduce((a, b) => a + b, 0)}" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>${W.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>${rows.join('')}</w:tbl>` +
+      `<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1000" w:right="1000" w:bottom="1000" w:left="1000" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>`;
+    return zipStore([
+      { name: '[Content_Types].xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>' },
+      { name: '_rels/.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>' },
+      { name: 'word/document.xml', data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>` }]);
+  }
+  function buildPdf(doc) {
+    const WIN = { '–': '\x96', '—': '\x97', '‘': '\x91', '’': '\x92', '“': '\x93', '”': '\x94', '€': '\x80', '…': '\x85', '•': '\x95' };
+    const enc = t => String(t == null ? '' : t).normalize('NFC').replace(/[\u0000-\u001F]/g, ' ').split('').map(ch => ch.charCodeAt(0) < 256 ? ch : (WIN[ch] || '?')).join('').replace(/([()\\])/g, '\\$1');
+    const cut = (t, n) => { t = String(t || ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+    const pages = []; let cur = null, y = 0;
+    const add = (font, size, x, text, gray) => { cur.push(`${gray ? '0.4 g' : '0 g'} BT /${font} ${size} Tf ${x} ${y} Td (${enc(text)}) Tj ET`); };
+    const newPage = () => { cur = []; pages.push(cur); y = 800; };
+    newPage(); add('F2', 20, 40, cut(doc.title, 60)); y -= 22; add('F1', 11, 40, cut(doc.sub, 100), true); y -= 28;
+    const headRow = () => { add('F2', 10, 40, 'Nr'); add('F2', 10, 66, 'Zeit'); add('F2', 10, 112, 'Titel'); add('F2', 10, 440, 'Länge'); add('F2', 10, 490, 'Tonart'); y -= 6; cur.push(`0.7 G 40 ${y} m 555 ${y} l S`); y -= 16; };
+    headRow();
+    doc.rows.forEach(r => {
+      const need = r.note ? 34 : 20;
+      if (y - need < 50) { newPage(); headRow(); }
+      if (r.num) add('F2', 13, 40, r.num + '.');
+      add('F1', 10, 66, r.clock || '', true);
+      add(r.special ? 'F3' : 'F2', 12, 112, cut(r.title + (r.artist ? ' – ' + r.artist : ''), 58));
+      add('F1', 10, 440, r.dur || '', true); add('F1', 10, 490, cut(r.key || '', 12), true);
+      if (r.note) { y -= 13; add('F1', 9, 112, cut(r.note, 90), true); }
+      y -= 20;
+    });
+    const objs = [];   // 1 Catalog, 2 Pages, 3-5 Fonts, dann Seiten und Inhalte
+    const fontObj = n => `<< /Type /Font /Subtype /Type1 /BaseFont /${n} /Encoding /WinAnsiEncoding >>`;
+    objs[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+    objs[3] = fontObj('Helvetica'); objs[4] = fontObj('Helvetica-Bold'); objs[5] = fontObj('Helvetica-Oblique');
+    const kids = [];
+    pages.forEach((p, i) => {
+      const pn = 6 + i * 2, cn = pn + 1, stream = p.join('\n');
+      kids.push(pn + ' 0 R');
+      objs[pn] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents ${cn} 0 R >>`;
+      objs[cn] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+    });
+    objs[2] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages.length} >>`;
+    let out = '%PDF-1.4\n'; const offs = [];
+    for (let i = 1; i < objs.length; i++) { offs[i] = out.length; out += `${i} 0 obj\n${objs[i]}\nendobj\n`; }
+    const xr = out.length;
+    out += `xref\n0 ${objs.length}\n0000000000 65535 f \n` + offs.slice(1).map(o => String(o).padStart(10, '0') + ' 00000 n \n').join('') + `trailer\n<< /Size ${objs.length} /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF`;
+    const u8 = new Uint8Array(out.length); for (let i = 0; i < out.length; i++) u8[i] = out.charCodeAt(i) & 255;
+    return new Blob([u8], { type: 'application/pdf' });
+  }
+  // ==DOCX-PDF-END
   // Export: Text, CSV, JSON, PDF
   document.querySelectorAll('[data-slx]').forEach(b => b.addEventListener('click', () => {
     const L = slCur(); if (!L) return; const T = slTimes(L), kind = b.dataset.slx;
+    if (kind === 'docx' || kind === 'pdffile') {
+      const g = calEvents.find(e => e.id === L.gigId);
+      const doc = { title: L.name || 'Setlist', sub: (g ? 'Gig: ' + (g.title || '') + (g.date ? ' (' + fmtDateOv(parseKey(g.date), ovCfg().date) + ')' : '') + ' · ' : '') + 'Gesamt ' + slFmt(T.total),
+        rows: T.rows.map(r => ({ num: r.num || '', clock: r.clock || '', title: r.it.title || SL_TYPES[r.it.type].label, artist: r.it.artist || '', dur: slFmt(r.it.dur), key: [r.it.key, r.it.bpm ? r.it.bpm + ' BPM' : ''].filter(Boolean).join(' · '), note: r.it.note || '', special: !r.num })) };
+      const blob = kind === 'docx' ? buildDocx(doc) : buildPdf(doc), nm = (L.name || 'Setlist').replace(/[^\p{L}\p{N}_ -]+/gu, '').trim() || 'Setlist';
+      const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = nm + (kind === 'docx' ? '.docx' : '.pdf'); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    }
     if (kind === 'pdf') {
       // Druckansicht: gross und gut lesbar auf der Bühne; „Als PDF speichern“ im Druckdialog
       const g = calEvents.find(e => e.id === L.gigId), esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -2868,7 +3041,7 @@
       w.document.close(); w.focus(); setTimeout(() => { try { w.print(); } catch (e) {} }, 400);
       return;
     }
-    const gig = calEvents.find(e => e.id === L.gigId), safe = (L.name || 'Setlist').replace(/[^\wäöüÄÖÜ -]+/g, '').trim() || 'Setlist';
+    const gig = calEvents.find(e => e.id === L.gigId), safe = (L.name || 'Setlist').replace(/[^\p{L}\p{N}_ -]+/gu, '').trim() || 'Setlist';
     let txt, mime;
     if (kind === 'json') { txt = JSON.stringify({ name: L.name, gig: gig ? gig.title : '', start: L.start || '', targetMin: L.targetMin || 0, items: L.items }, null, 2); mime = 'application/json'; }
     else if (kind === 'csv') {
@@ -2876,7 +3049,7 @@
       txt = '﻿' + ['Nr', 'Uhrzeit', 'Art', 'Titel', 'Interpret', 'Veröffentlichung', 'Name', 'Jahr', 'Genre', 'Länge', 'Tonart', 'BPM', 'Notiz'].map(q).join(';') + '\r\n' +
         T.rows.map(r => [r.num || '', r.clock, SL_TYPES[r.it.type].label, r.it.title, r.it.artist, r.it.album ? (SL_REL[r.it.relType] || 'Album') : '', r.it.album, r.it.year || '', r.it.genre, slFmt(r.it.dur), r.it.key, r.it.bpm || '', r.it.note].map(q).join(';')).join('\r\n'); mime = 'text/csv';
     } else {
-      txt = [L.name || 'Setlist', gig ? `Gig: ${gig.title || ''}${gig.date ? ' (' + fmtDateOv(parseKey(gig.date), ovCfg().date) + ')' : ''}` : '', `Gesamt: ${slFmt(T.total)}`, ''].filter((x, i) => x || i === 3).join('\r\n') + '\r\n' +
+      txt = '\uFEFF' + [L.name || 'Setlist', gig ? `Gig: ${gig.title || ''}${gig.date ? ' (' + fmtDateOv(parseKey(gig.date), ovCfg().date) + ')' : ''}` : '', `Gesamt: ${slFmt(T.total)}`, ''].filter((x, i) => x || i === 3).join('\r\n') + '\r\n' +
         T.rows.map(r => `${r.num ? String(r.num).padStart(2) + '.' : ' · '} ${r.clock ? r.clock + '  ' : ''}${r.it.title || SL_TYPES[r.it.type].label}${r.it.artist ? ' – ' + r.it.artist : ''}  (${slFmt(r.it.dur)})${r.it.key ? '  [' + r.it.key + ']' : ''}${r.it.note ? '  ' + r.it.note : ''}`).join('\r\n'); mime = 'text/plain';
     }
     const url = URL.createObjectURL(new Blob([txt], { type: mime + ';charset=utf-8' }));
@@ -2935,6 +3108,14 @@
     }, 300);
   }
   function ttList(gid) { if (!ttMap[gid]) ttMap[gid] = { id: gid, gigId: gid, entries: [] }; return ttMap[gid]; }
+  // Verknüpfung mit Checklisten-Punkt des Gigs (Eintrag speichert nur die Punkt-ID: clId)
+  function ttGigItems(gid) {
+    const ev = slGigs().find(e => e.id === gid); if (!ev || !ev.checklists) return [];
+    const list = Array.isArray(ev.checklists[ev.date]) ? ev.checklists[ev.date] : (Object.values(ev.checklists).find(Array.isArray) || []);
+    const out = [];
+    list.forEach(r => (r.items || []).forEach(i => out.push({ id: i.id, title: i.title, reiter: r.title, done: !!i.done })));
+    return out;
+  }
   function openTimetable() {
     ttSub();
     const gigs = slGigs(), todayK = dKey(dOnly(new Date()));
@@ -2946,6 +3127,7 @@
     gigs.forEach(e => sel.appendChild(new Option(`${fmtDateOv(parseKey(e.date), ovCfg().date)} · ${e.title || 'Gig'}`, e.id)));
     if (ttSel) sel.value = ttSel;
     const has = !!ttSel, can = ttCan();
+    $('ttGo').disabled = !has;
     ['ttAdd', 'ttImport', 'ttCopy'].forEach(i => { $(i).disabled = !has; $(i).classList.toggle('pv-locked', !can); });
     document.querySelectorAll('[data-ttx]').forEach(b => { b.disabled = !has; });
     const box = $('ttItems'); box.innerHTML = '';
@@ -2960,6 +3142,8 @@
       if (sub) m.append(el('div', 'tt-note', sub));
       const sn = ttSetName(x);
       if (sn) { const lk = el('span', 'tt-setlink', '🎼 ' + sn); lk.title = 'Zur Setlist'; lk.addEventListener('click', e => { e.stopPropagation(); slJump = x.setlistId; showPage('page6'); }); m.append(lk); }
+      if (x.clId) { const ci = ttGigItems(ttSel).find(i => i.id === x.clId); if (ci) m.append(el('span', 'tt-setlink', (ci.done ? '✅ ' : '☐ ') + ci.title)); }
+      if (x.bandId && x.bandId !== currentBand && bands[x.bandId]) { const bl = el('span', 'tt-setlink', '↗ ' + bands[x.bandId].name); bl.title = 'Zu dieser Band wechseln'; bl.addEventListener('click', e => { e.stopPropagation(); $('bandSwitch').value = x.bandId; $('bandSwitch').dispatchEvent(new Event('change')); }); m.append(bl); }
       row.append(el('div', 'tt-time', fmtHHMM(x.time, c.time)), m);
       row.addEventListener('click', () => ttOpen(x));
       box.appendChild(row);
@@ -2972,6 +3156,12 @@
     slSub();
     const ss = $('ttSet'); ss.innerHTML = ''; ss.appendChild(new Option('– keine –', ''));
     slLists.forEach(l => ss.appendChild(new Option(l.name || 'Setlist', l.id)));
+    const bs = $('ttBand'); bs.innerHTML = ''; bs.appendChild(new Option('– keine –', ''));
+    Object.keys(bands).filter(id => id !== currentBand).forEach(id => bs.appendChild(new Option(bands[id].name || 'Band', id)));
+    bs.value = x && bands[x.bandId] && x.bandId !== currentBand ? x.bandId : ''; $('ttBandWrap').classList.toggle('hidden', bs.options.length < 2);
+    const cs = $('ttCl'); cs.innerHTML = ''; cs.appendChild(new Option('– keine –', ''));
+    ttGigItems(ttSel).forEach(i => cs.appendChild(new Option((i.reiter ? i.reiter + ': ' : '') + i.title, i.id)));
+    cs.value = x ? (x.clId || '') : ''; $('ttClWrap').classList.toggle('hidden', cs.options.length < 2);
     $('ttTime').value = x ? x.time : ''; $('ttTitle').value = x ? ttName(x) : ''; $('ttNote').value = x ? (x.note || '') : '';
     $('ttEnd').value = x ? (x.end || '') : ''; $('ttDur').value = x && +x.dur > 0 ? x.dur : ''; $('ttSongs').value = x && +x.songs > 0 ? x.songs : ''; ss.value = x ? (x.setlistId || '') : '';
     $('ttDel').classList.toggle('hidden', !x); $('ttMsg').textContent = '';
@@ -2980,13 +3170,15 @@
   const ttClose = () => $('ttModal').classList.add('hidden');
   $('ttGig').addEventListener('change', () => { ttSel = $('ttGig').value; renderTimetable(); });
   $('ttAdd').addEventListener('click', () => ttOpen(null));
+  $('ttBand').addEventListener('change', () => { const id = $('ttBand').value; if (id && !$('ttTitle').value.trim()) $('ttTitle').value = bands[id].name || ''; });
+  $('ttGo').addEventListener('click', () => { const ev = slGigs().find(e => e.id === ttSel); if (ev) openEventModal({ ev, occ: parseKey(ev.date) }); });
   $('ttClose').addEventListener('click', ttClose); $('ttCancel').addEventListener('click', ttClose);
   $('ttSave').addEventListener('click', () => {
     const time = $('ttTime').value, band = $('ttTitle').value.trim();
     if (!band) { $('ttMsg').textContent = 'Bitte den Bandnamen angeben (Pflicht).'; return; }
     if (!/^\d\d:\d\d$/.test(time)) { $('ttMsg').textContent = 'Bitte die Startzeit angeben (Pflicht).'; return; }
     const end = $('ttEnd').value, dur = Math.max(0, parseInt($('ttDur').value, 10) || 0), songs = Math.max(0, parseInt($('ttSongs').value, 10) || 0);
-    const f = { time, band, end: end || '', dur: end ? 0 : dur, songs, setlistId: $('ttSet').value || '', note: $('ttNote').value.trim() };
+    const f = { time, band, end: end || '', dur: end ? 0 : dur, songs, setlistId: $('ttSet').value || '', clId: $('ttCl').value || '', bandId: $('ttBand').value || '', note: $('ttNote').value.trim() };
     const L = ttList(ttSel);
     if (ttEdit) { const x = L.entries.find(e => e.id === ttEdit.id); if (x) { Object.assign(x, f); delete x.title; } }
     else L.entries.push({ id: slId(), ...f });
@@ -3053,7 +3245,7 @@
     if (!res.length) { $('ttImpMsg').textContent = 'Keine Zeilen mit Uhrzeit gefunden. Beispiel: 16:00 Soundcheck'; return; }
     const L = ttList(ttSel);
     if ($('ttImpMode').value === 'replace') L.entries = [];
-    res.forEach(x => L.entries.push({ id: slId(), setlistId: '', ...x }));
+    res.forEach(x => L.entries.push({ id: slId(), setlistId: '', ...x, band: cleanText(x.band || x.title).slice(0, 80), note: cleanText(x.note).slice(0, 200) }));
     ttSave(ttSel); ttImpClose(); renderTimetable();
     flash(res.length + ' Einträge übernommen' + (bad ? `, ${bad} Zeilen übersprungen` : ''));
   });
@@ -3061,8 +3253,8 @@
     if (!ttSel) return; const g = calEvents.find(e => e.id === ttSel) || {}, kind = b.dataset.ttx, list = ttEntries(ttSel);
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     const txt = kind === 'csv' ? '\uFEFF' + ['Uhrzeit', 'Band', 'Ende', 'Dauer (Min.)', 'Songs', 'Notiz'].map(q).join(';') + '\r\n' + list.map(x => [x.time, ttName(x), x.end || '', x.dur || '', x.songs || '', x.note].map(q).join(';')).join('\r\n')
-      : list.map(x => `${x.time}${x.end ? ' - ' + x.end : ''} ${ttName(x)}${x.songs ? ' (' + x.songs + ' Songs)' : ''}${x.note ? ' – ' + x.note : ''}`).join('\r\n');
-    const safe = ('Timetable ' + (g.title || '')).replace(/[^\wäöüÄÖÜ -]+/g, '').trim() || 'Timetable';
+      : '\uFEFF' + list.map(x => `${x.time}${x.end ? ' - ' + x.end : ''} ${ttName(x)}${x.songs ? ' (' + x.songs + ' Songs)' : ''}${x.note ? ' – ' + x.note : ''}`).join('\r\n');
+    const safe = ('Timetable ' + (g.title || '')).replace(/[^\p{L}\p{N}_ -]+/gu, '').trim() || 'Timetable';
     const url = URL.createObjectURL(new Blob([txt], { type: (kind === 'csv' ? 'text/csv' : 'text/plain') + ';charset=utf-8' }));
     const a = document.createElement('a'); a.href = url; a.download = safe + '.' + (kind === 'csv' ? 'csv' : 'txt'); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }));
@@ -3072,17 +3264,17 @@
   ttCalBtn();
 
   // ================= Finanzen: befindet sich im Bau =================
-  const FIN_LOCKED = true;   // Finanzen im Bau: für alle Benutzer gesperrt
+  const FIN_LOCKED = false;   // seit v0.4.28 freigegeben (true = für alle gesperrt)
   const FIN_LOCK = 'Finanzen befinden sich im Bau – diese Funktion ist noch gesperrt.';
   $('buildOk').addEventListener('click', () => $('buildModal').classList.add('hidden'));
   $('buildModal').addEventListener('click', e => { if (e.target === $('buildModal')) $('buildModal').classList.add('hidden'); });
-  $('page-finance').classList.add('fin-locked');
-  $('page-finance').addEventListener('click', e => {
+  if (FIN_LOCKED) $('page-finance').classList.add('fin-locked');
+  if (FIN_LOCKED) $('page-finance').addEventListener('click', e => {
     const t = e.target.closest('button, select, input, a, .fin-row, label');
     if (!t) return;
     e.preventDefault(); e.stopPropagation(); previewBlocked(e, FIN_LOCK);
   }, true);
-  ['mousedown', 'keydown', 'change', 'focusin'].forEach(ev => $('page-finance').addEventListener(ev, e => {
+  if (FIN_LOCKED) ['mousedown', 'keydown', 'change', 'focusin'].forEach(ev => $('page-finance').addEventListener(ev, e => {
     if (e.target.closest('select, input')) { e.preventDefault(); if (ev === 'focusin') e.target.blur(); }
   }, true));
 
@@ -3241,7 +3433,7 @@
     });
     const text = '﻿' + rows.join('\r\n');
     const band = (bands[currentBand].name || 'Band').replace(/[^\w\-äöüÄÖÜ ]+/g, '').trim().replace(/\s+/g, '_');
-    const filename = `Stagemate_${APP_VERSION}_Finanzen_${band}_${finYear}.csv`;
+    const filename = `StageMate_${APP_VERSION}_Finanzen_${band}_${finYear}.csv`;
     const res = await Data.saveFile({ filename, data: text, type: 'text/csv;charset=utf-8' });
     if (res === 'saved') flash('CSV gespeichert: ' + filename);
     else if (res === 'browser') flash('CSV exportiert: ' + filename);
@@ -3612,6 +3804,7 @@
   const ROLE_RIGHTS = {
     'Organisation': 'Rollen der Mitglieder zuweisen (ausser „Organisation“ bei sich selbst), Rollenliste, Termin-Kategorien und Bandlogo bearbeiten, Gigs bearbeiten und löschen, Dokumente hinzufügen und entfernen, alle Checklisten-Einträge ändern und Mitglieder zuweisen, der Auflösung der Band zustimmen.',
     'Setlist': 'Schaltet „Bearbeiten“ in den Registerkarten „Setlist“ und „Songs“ frei – auch wenn dort sonst „Nur lesen“ oder „Ausgeblendet“ eingestellt ist.',
+    'Finanzen': 'Schaltet „Bearbeiten“ in der Registerkarte „Finanzen“ frei (Einnahmen und Ausgaben erfassen) – auch wenn dort sonst „Nur lesen“ oder „Ausgeblendet“ eingestellt ist.',
     'Timetable': 'Schaltet „Bearbeiten“ in der Registerkarte „Timetable“ frei – auch wenn dort sonst „Nur lesen“ oder „Ausgeblendet“ eingestellt ist.',
     'Checkliste': 'Schaltet „Bearbeiten“ in der Registerkarte „Checkliste“ frei – auch wenn dort sonst „Nur lesen“ oder „Ausgeblendet“ eingestellt ist. Eigene Reiter und Unterreiter erstellen, bearbeiten und löschen, Checklisten erstellen.',
   };
@@ -3933,6 +4126,34 @@
   });
 
   let flashTimer = null;
+  // ---- Zeichenfilter für Texteingaben: keine Emojis, nur übliche Zeichen; Umlaute bleiben (NFC) ----
+  const EMOJI_RE = /\p{Extended_Pictographic}|[\u{1F1E6}-\u{1F1FF}]|[\u{1F3FB}-\u{1F3FF}]|[\uFE0E\uFE0F\u20E3\u200D]/u;
+  const BAD_CHARS_RE = /[^\p{L}\p{N}\u0300-\u036F\s.,;:!?'"()\[\]\-–—_\/&+*#@%=€$°…·’‘„“”«»§]/gu;
+  function cleanText(v) { return String(v == null ? '' : v).normalize('NFC').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').replace(BAD_CHARS_RE, ''); }
+  let topAlertT = null;
+  function topAlert(text) {
+    let a = document.getElementById('topAlert');
+    if (!a) { a = document.createElement('div'); a.id = 'topAlert'; a.className = 'top-alert'; a.setAttribute('role', 'alert'); document.body.appendChild(a); }
+    a.textContent = text; a.classList.add('show'); clearTimeout(topAlertT); topAlertT = setTimeout(() => a.classList.remove('show'), 4200);
+  }
+  document.addEventListener('input', e => {
+    const t = e.target; if (!t || e.isComposing || t.dataset.raw != null) return;
+    const ok = t.tagName === 'TEXTAREA' || (t.tagName === 'INPUT' && ['text', 'search', 'tel', ''].includes((t.getAttribute('type') || '').toLowerCase()));
+    if (!ok) return;
+    const before = t.value, after = cleanText(before); if (after === before) return;
+    const pos = t.selectionStart, hadEmoji = EMOJI_RE.test(before);
+    t.value = after; try { const np = Math.max(0, (pos == null ? after.length : pos) - (before.length - after.length)); t.setSelectionRange(np, np); } catch (er) {}
+    topAlert(hadEmoji ? 'Emojis können hier nicht verwendet werden. Bei Bedarf bitte Sonderzeichen nutzen, zum Beispiel – & + # *.' : 'Dieses Zeichen ist nicht erlaubt. Erlaubt sind Buchstaben, Zahlen und übliche Satzzeichen.');
+  }, true);
+  // Säubern beim Verlassen des Feldes (und bei Enter): mehrfache Leerzeichen, Leerzeichen am Rand, zu viele Leerzeilen
+  const tidyText = v => String(v == null ? '' : v).replace(/[ \t\u00A0]+/g, ' ').split(/\r?\n/).map(l => l.trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  function tidyField(t) {
+    if (!t || t.dataset.raw != null) return;
+    const ok = t.tagName === 'TEXTAREA' || (t.tagName === 'INPUT' && ['text', 'search', 'tel', ''].includes((t.getAttribute('type') || '').toLowerCase()));
+    if (!ok) return; const nv = tidyText(t.value); if (nv !== t.value) t.value = nv;
+  }
+  document.addEventListener('change', e => tidyField(e.target), true);
+  document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.tagName === 'INPUT') tidyField(e.target); }, true);
   function flash(text, isErr) {
     const f = $('flash');
     f.textContent = text; f.className = 'flash' + (isErr ? ' err' : '');
@@ -4481,6 +4702,13 @@
   let evEditing = null;       // { ev?, occ? }
   let evWeekdays = new Set();
   function gigFlash() { const b = $('gigAdd'); b.classList.remove('flash3'); void b.offsetWidth; b.classList.add('flash3'); setTimeout(() => b.classList.remove('flash3'), 2400); }
+  // Textvorschläge für die Verpflegung (aus Allergene.txt): Klick hängt den Text an
+  const CAT_SUGG = ['1 Vegi-Menü', '1 veganes Menü', 'Bitte ohne Schweinefleisch', 'Bitte glutenfreie Option', 'Bitte laktosefreie Option', 'Getränke für die Band', 'Nachtessen im Backstage'];
+  function catSuggBuild() {
+    const box = $('evCatSugg'); if (!box) return; box.innerHTML = '';
+    const add = t => { const f = $('evCatering'); f.value = (f.value.trim() ? f.value.trim() + '\n' : '') + t; f.dispatchEvent(new Event('input')); };
+    CAT_SUGG.forEach(t => { const b = el('button', 'chip-btn', '+ ' + t); b.type = 'button'; b.addEventListener('click', () => add(t)); box.append(b); });
+  }
   // Teilnehmer eines Termins (leer = alle)
   async function evAttBuild(sel) {
     const box = $('evAtt'); box.innerHTML = ''; const bid = currentBand;
@@ -4490,9 +4718,7 @@
       sum();
     };
     const sum = () => { const n = box.querySelectorAll('input:checked').length; $('secAttSum').textContent = n ? n + ' ausgewählt' : 'alle'; };
-    if (!bandMembersCache[bid]) {
-      try { const q = await db.collection('members').where('bandIds', 'array-contains', bid).get(); bandMembersCache[bid] = q.docs.map(d => ({ uid: d.id, ...d.data() })).filter(m => isActiveIn(m, bid, bands[bid].cfg)); } catch (e) {}
-    }
+    await loadBandMembers(bid);
     draw();
   }
   function openEventModal(opts) {
@@ -4533,7 +4759,7 @@
     const sc = (ev && ev.schedule) || {};
     $('evGetIn').value = sc.getin || ''; $('evAufbau').value = sc.aufbau || ''; $('evSoundcheck').value = sc.soundcheck || ''; $('evLinecheck').value = sc.linecheck || '';
     $('evCatering').value = ev ? ev.catering || '' : ''; $('evCateringTime').value = ev ? ev.cateringTime || '' : '';
-    evAttBuild(ev && Array.isArray(ev.attendees) ? ev.attendees : []);
+    evAttBuild(ev && Array.isArray(ev.attendees) ? ev.attendees : []); catSuggBuild();
     $('evChecklist').checked = !!(ev && ev.checklist) || (!ev && !!opts.checklist);
     evLinkList = ev && Array.isArray(ev.links) ? ev.links.slice() : [];
     evContactList = ev && Array.isArray(ev.contacts) ? ev.contacts.map(c => ({ ...c })) : [];
@@ -6155,7 +6381,7 @@
             if (pub || mayIntern) r.title = 'Setlist „' + (sl.name || '') + '“: ' + songs.map(i => i.title).join(', ');
           }
           r.title = 'Zur Timetable'; r.addEventListener('click', e => { if (levelFor(currentBand, 'page8') === 'hidden') return previewBlocked(e, 'Keine Berechtigung: Die Registerkarte „Timetable“ ist für dich ausgeblendet.'); ttSel = ev.id; showPage('page8'); });
-          const other = Object.keys(bands).find(id => id !== currentBand && (bands[id].name || '').trim().toLowerCase() === ttName(x).toLowerCase());
+          const other = (x.bandId && x.bandId !== currentBand && bands[x.bandId]) ? x.bandId : Object.keys(bands).find(id => id !== currentBand && (bands[id].name || '').trim().toLowerCase() === ttName(x).toLowerCase());
           if (other) {
             const w = el('div', 'lu-wrap'), go = el('button', 'btn small ghost lu-go', '↗ Band öffnen'); go.type = 'button';
             go.title = 'Zu „' + bands[other].name + '“ wechseln';
@@ -6165,6 +6391,42 @@
         });
         section('Line-up', lu.length === 1 ? '1 Band' : lu.length + ' Bands', box, false);
       }
+    }
+    // Teilnehmer (leer = alle)
+    {
+      const att = Array.isArray(ev.attendees) ? ev.attendees : [], bid = currentBand;
+      if (att.length) {
+        const p = el('div', 'gig-text', 'Wird geladen …');
+        section('Teilnehmer', att.length + (att.length === 1 ? ' Person' : ' Personen'), p, false);
+        (async () => {
+          await loadBandMembers(bid);
+          const names = att.map(u => { const m = (bandMembersCache[bid] || []).find(x => x.uid === u); return m ? (m.name || 'Unbekannt') : (u === uid ? profile.name : ''); }).filter(Boolean);
+          p.textContent = names.length ? names.join(', ') : 'Keine aktiven Mitglieder ausgewählt.';
+        })();
+      }
+    }
+    // Ernährung der Band (anonyme Zusammenfassung, nur von Personen mit Haken „für meine Bands verwenden“)
+    {
+      const bid = currentBand, p = el('div', 'gig-text', 'Wird geladen …');
+      const sec = el('details', 'gsec hidden'); const sm = el('summary'); sm.append(el('span', 'gsec-t', 'Ernährung der Band')); sec.append(sm, p); body.appendChild(sec);
+      (async () => {
+        await loadBandMembers(bid);
+        const foods = [];
+        await Promise.all((bandMembersCache[bid] || []).map(async m => {
+          if (m.uid === uid) { if (profile.food && profile.food.share) foods.push(profile.food); return; }
+          try { const c = await db.doc('contacts/' + m.uid).get(); const f = c.exists ? c.data().food : null; if (f && f.share) foods.push(f); } catch (e) {}
+        }));
+        if (!foods.length) return;
+        const cnt = k => { const o = {}; foods.forEach(f => (f[k] || []).forEach(v => { o[v] = (o[v] || 0) + 1; })); return Object.entries(o).sort((a, b) => b[1] - a[1]).map(([v, n]) => n + '× ' + v); };
+        const lines = [], d = cnt('diet'), al = cnt('allergens'), notes = foods.map(f => f.note).filter(Boolean);
+        if (d.length) lines.push('Ernährung: ' + d.join(', '));
+        if (al.length) lines.push('Allergien: ' + al.join(', '));
+        if (notes.length) lines.push('Hinweise: ' + notes.join(' · '));
+        if (!lines.length) return;
+        p.textContent = ''; lines.forEach(l => p.append(el('div', null, l)));
+        sm.append(el('span', 'gsec-s', foods.length + (foods.length === 1 ? ' Person' : ' Personen')));
+        sec.classList.remove('hidden');
+      })();
     }
     // Google Maps: eigener Link oder automatisch aus Location + Adresse; dazu Route planen
     const place = [ev.location, (ev.address || '').replace(/\n/g, ', ')].filter(Boolean).join(', ');
@@ -6443,7 +6705,7 @@
       profile: [
         T('🎸', 'Zu deinen Bands', 'Bist du nur in einer Band, führt „Zu deinen Bands“ im Sortiermenü der Checkliste hierher – der Bereich zum Beitreten oder Gründen leuchtet kurz auf.'),
         T('🖼️', 'Profilbild', 'Bild hinzufügen, ändern oder löschen. Es wird zugeschnitten und erst mit „Speichern“ übernommen. Ob andere es sehen, stellst du unter Einstellungen → Sichtbarkeit ein.'),
-        T('👤', 'Persönliche Angaben', 'Nickname, Vorname, Nachname und Telefon. In der Web-Version fragt Stagemate beim Speichern nach deinem Passwort. Der Nickname muss eindeutig sein.'),
+        T('👤', 'Persönliche Angaben', 'Nickname, Vorname, Nachname und Telefon. In der Web-Version fragt StageMate beim Speichern nach deinem Passwort. Der Nickname muss eindeutig sein.'),
         T('🆔', 'PUID', 'Deine feste ID. „PUID anzeigen“ blendet sie ein, ein zweiter Klick wieder aus.'),
         T('🔽', 'Bereiche zuklappen', 'Ein Klick auf „Persönliche Angaben“ oder „Weitere Band hinzufügen“ klappt den Bereich zu oder auf.'),
         T('👁', 'Sichtbarkeit', '„Sichtbarkeitseinstellungen“ unten im Profil führt direkt zu allen Sichtbarkeiten in den Einstellungen.'),
@@ -6525,13 +6787,13 @@
       { icon: '💡', title: 'Tipps', text: 'Der Knopf „Tipps“ (auf der Bandseite unten links, auf der persönlichen Übersicht oben in der Kopfzeile) zeigt immer die Tipps zur Seite, auf der du gerade bist.' },
       { icon: '⚙️', title: 'Einstellungen', text: 'Auf der persönlichen Übersicht: Darstellung (Hell, Dunkel, Automatisch), Mauszeiger, Uhr & Datum, Sichtbarkeit und die Sortierung der Checkliste.' },
       { icon: '🟣', title: 'Status', text: 'Oben rechts: Automatisch (Übersicht = Privat, Bandseite = Online), Online, Privat oder Offline. Bei „Offline“ sehen dich deine Bands als offline.' },
-      { icon: '🚧', title: 'Alpha', text: 'Stagemate ist in der Alpha-Phase und verändert sich laufend. Geplant: Beta ab 0.5.0, Prerelease ab 0.9.0, Release mit 1.0.0. Die Versionsnummer steht ganz unten links; der Hinweis erscheint auf dem Anmeldebildschirm und lässt sich über das Abzeichen „Alpha“ wieder öffnen.' },
+      { icon: '🚧', title: 'Alpha', text: 'StageMate ist in der Alpha-Phase und verändert sich laufend. Geplant: Beta ab 0.7.0, Prerelease ab 0.9.0, Release mit 1.0.0. Die Versionsnummer steht ganz unten links; der Hinweis erscheint auf dem Anmeldebildschirm und lässt sich über das Abzeichen „Alpha“ wieder öffnen.' },
       { icon: '💡', title: 'Vorschau', text: 'Bei Uhr & Datum, Profilbild, Kontaktangaben, Band-Sichtbarkeit und Band-Tag steht eine kleine Glühbirne. Darüberfahren oder antippen zeigt, wie es aussehen wird.' },
       { icon: '⏪', title: 'Vor und Zurück', text: 'Oben links neben dem Seitentitel: ‹ führt zur vorherigen Seite, › wieder vorwärts – wie im Browser.' },
       { icon: '💬', title: 'Support', text: 'Unten links „Support“ öffnet ein Fenster mit den Links zu Instagram und TikTok (housi_666) – für Fragen, Probleme oder Ideen.' },
       { icon: '🔍', title: 'Bilder gross ansehen', text: 'Ein Klick auf ein Profilbild oder Bandlogo zeigt es gross an. Verborgene Bilder sind verschwommen und mit einem Schloss markiert.' },
       { icon: '🙈', title: 'Profilbild verbergen', text: 'Unter Einstellungen → Sichtbarkeit „Profilbild für andere sichtbar“ ausschalten. Andere sehen dann nur noch ein verschwommenes Bild mit Schloss.' },
-      { icon: '🚧', title: 'Finanzen', text: 'Die Finanzen befinden sich im Bau. Du kannst dich umsehen, die Funktionen sind aber noch gesperrt.' },
+      { icon: '💰', title: 'Finanzen', text: 'Einnahmen und Ausgaben der Band erfassen (Gage, Merch, Proberaum …), pro Jahr mit Summen und CSV-Export. Bearbeiten dürfen Admin und Mitglieder mit der Rolle „Finanzen“; alle anderen sehen nur.' },
       { icon: '🏠', title: 'Ablauf', text: 'Anmelden → persönliche Übersicht → Band wählen → Bandseite. Über „Zurück zum Startbildschirm“ kommst du wieder auf die Übersicht.' },
       { icon: '📝', title: 'Changelog', text: 'Neben „Nutzungsbedingungen“ und „Datenschutz“ öffnet „Changelog“ alle Änderungen – verschachtelt nach Version (0 → 0.3 → v0.3.6), jede Version einzeln aufklappbar.' },
       { icon: '👁', title: 'Passwort ansehen', text: 'Das Auge im Passwortfeld gedrückt halten – solange du drückst, siehst du das Passwort im Klartext.' },
@@ -6643,11 +6905,18 @@
   }
   function syncDevBtn() {
     const onAuth = !$('auth').classList.contains('hidden'), onHub = !$('app').classList.contains('hidden') && inHub;
-    $('devBtn').classList.toggle('hidden', !(onAuth || onHub) || !$('devPanel').classList.contains('hidden'));
+    $('devBtn').classList.add('hidden');
   }
-  setInterval(syncDevBtn, 700); syncDevBtn();
+  syncDevBtn();
+  function openDevModal() { $('devModal').classList.remove('hidden'); setMsg($('devMsg'), ''); $('devPw').value = ''; setTimeout(() => $('devId').focus(), 30); }
+  // Versteckter Zugang: Ctrl+Shift+D, URL-Endung #dev oder 5x schnell auf das Housi-Zeichen tippen
+  const devAllowed = () => !$('devPanel') || $('devPanel').classList.contains('hidden');
+  document.addEventListener('keydown', e => { if (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd') && devAllowed()) { e.preventDefault(); openDevModal(); } });
+  if (location.hash === '#dev') { history.replaceState(null, '', location.pathname + location.search); setTimeout(openDevModal, 600); }
+  { let taps = [], hm = document.querySelector('.housi-mark');
+    if (hm) document.addEventListener('click', ev => { const r = hm.getBoundingClientRect(); if (!r.width || ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return; const t = Date.now(); taps = taps.filter(x => t - x < 2500); taps.push(t); if (taps.length >= 5) { taps = []; if (devAllowed()) openDevModal(); } }); }
   const closeDevModal = () => $('devModal').classList.add('hidden');
-  $('devBtn').addEventListener('click', () => { $('devModal').classList.remove('hidden'); setMsg($('devMsg'), ''); $('devPw').value = ''; setTimeout(() => $('devId').focus(), 30); });
+  
   ['devX', 'devCancel'].forEach(k => $(k).addEventListener('click', closeDevModal));
   $('devModal').addEventListener('click', e => { if (e.target === $('devModal')) closeDevModal(); });
   $('devId').addEventListener('input', () => { $('devMailHint').textContent = Data.usesFirebase && $('devId').value.trim() ? 'Firebase-Konto: ' + devEmail($('devId').value) : ''; });
@@ -6903,7 +7172,7 @@
         fbPane.querySelectorAll('[data-fbtab]').forEach(b => b.classList.toggle('active', b.dataset.fbtab === t));
         const up = t === 'up';
         $('fbTitle').textContent = up ? 'Konto erstellen' : 'Willkommen zurück';
-        $('fbHint').textContent = up ? 'Erstelle dein Stagemate-Konto. Danach trittst du deiner Band bei oder gründest eine.' : 'Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.';
+        $('fbHint').textContent = up ? 'Erstelle dein StageMate-Konto. Danach trittst du deiner Band bei oder gründest eine.' : 'Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.';
         $('fbPw2Wrap').classList.toggle('hidden', !up);
         $('fbPw').autocomplete = up ? 'new-password' : 'current-password';
         // Angaben aus „Anmelden“ nicht in „Konto erstellen“ übernehmen (und umgekehrt)
@@ -6940,7 +7209,7 @@
     if (offline) {
       $('fbForm').classList.add('hidden'); $('fbReset').classList.add('hidden'); fbPane.querySelector('.tabs').classList.add('hidden');
       $('fbTitle').textContent = 'Keine Verbindung';
-      $('fbHint').textContent = 'Der Stagemate-Server ist gerade nicht erreichbar. Prüfe deine Internetverbindung und lade die Seite neu.';
+      $('fbHint').textContent = 'Der StageMate-Server ist gerade nicht erreichbar. Prüfe deine Internetverbindung und lade die Seite neu.';
     }
   }
   function hideFbLogin() {

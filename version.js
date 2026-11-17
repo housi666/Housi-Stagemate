@@ -1,16 +1,76 @@
-/*! Stagemate v0.4.25 · Build 47 · 2026-11-17 */
-/* Stagemate – Version, Build und Changelog
+/*! StageMate v0.4.42 · Build 64 · 2026-11-17 */
+/* StageMate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.25';
-const APP_BUILD = 47;
+const APP_VERSION = 'v0.4.42';
+const APP_BUILD = 64;
 const APP_BUILD_DATE = '2026-11-17';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.42', date: '2026-11-17', items: [
+    { type: 'besser', text: 'Phasen neu festgelegt: Alpha bis 0.6.x, Beta ab 0.7.0, Prerelease ab 0.9.0, Release 1.0.0 (Hinweis in den Tipps angepasst).' }
+  ] },
+  { version: 'v0.4.41', date: '2026-11-17', items: [
+    { type: 'besser', text: 'Neuer Schreibname: StageMate (statt Stagemate) in der App, den Nutzungsbedingungen, der Datenschutzerklärung und allen Dateien.' },
+    { type: 'besser', text: 'Nutzungsbedingungen: Hinweis, dass StageMate bis November 2026 „Stagemate“ geschrieben wurde. Die Fassung vom 17.11.2026 bleibt, eine erneute Zustimmung ist nicht nötig (nur Schreibweise).' }
+  ] },
+  { version: 'v0.4.40', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Setlist: Ordner (Eingabe mit Vorschlägen, Ansicht gruppiert, Filter) und Vorlagen („Als Vorlage verwenden“, neue Setlist per „+ Aus Vorlage …“).' }
+  ] },
+  { version: 'v0.4.39', date: '2026-11-17', items: [
+    { type: 'besser', text: 'Firestore-Regeln: Profil- und Bandnamen werden auch serverseitig geprüft (erlaubte Zeichen, höchstens 100 Zeichen). Alte, unveränderte Namen bleiben erlaubt. Die Regeln müssen in der Firebase-Konsole veröffentlicht werden.' },
+    { type: 'besser', text: 'Bandname-Felder auf 60 Zeichen begrenzt.' }
+  ] },
+  { version: 'v0.4.38', date: '2026-11-17', items: [
+    { type: 'besser', text: 'Texteingaben werden beim Verlassen des Feldes und bei Enter automatisch gesäubert: doppelte Leerzeichen, Leerzeichen am Rand und überzählige Leerzeilen entfallen.' }
+  ] },
+  { version: 'v0.4.37', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Texteingaben (Songtitel, Band, Namen, Notizen und so weiter): Emojis und seltene Sonderzeichen werden beim Tippen und Einfügen entfernt; oben erscheint eine rote Meldung mit dem Hinweis, stattdessen Sonderzeichen zu nutzen.' },
+    { type: 'besser', text: 'Erlaubt sind Buchstaben (auch Ä, Ö, Ü und andere Sprachen), Zahlen und übliche Satzzeichen. Passwort-, E-Mail- und Zahlenfelder sind nicht betroffen.' },
+    { type: 'besser', text: 'Umlaute in allen Exporten abgesichert (Textdateien mit UTF-8-Kennung, Word, PDF); Dateinamen behalten Buchstaben mit Akzenten; Import bereinigt Titel, Interpret und Notizen.' }
+  ] },
+  { version: 'v0.4.36', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Setlist: Export als Word-Datei (.docx) und als PDF-Datei zum Herunterladen; „PDF / Drucken“ heisst jetzt „Drucken“.' }
+  ] },
+  { version: 'v0.4.35', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Mein Kalender: eigene Termine lassen sich mit einer Band und einem Termin dieser Band verknüpfen; ein Klick auf die Verknüpfung springt dorthin.' }
+  ] },
+  { version: 'v0.4.34', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Startbildschirm: neue Anzeige „Veranstaltungen“ mit allen Gigs deiner Bands, umschaltbar zwischen Kommend und Vergangen; Klick öffnet die Gig-Karte.' }
+  ] },
+  { version: 'v0.4.33', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Timetable: Knopf „Gig öffnen“ springt zur Gig-Karte des gewählten Auftritts.' },
+    { type: 'neu', text: 'Timetable-Eintrag: eigene Band fest verknüpfbar (Sprung zur Band aus der Timetable und aus dem Line-up, auch bei abweichendem Namen).' }
+  ] },
+  { version: 'v0.4.32', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Timetable: Eintrag kann mit einem Checklisten-Punkt des Gigs verknüpft werden (z. B. Soundcheck); der Punkt mit Haken erscheint im Eintrag.' }
+  ] },
+  { version: 'v0.4.31', date: '2026-11-17', items: [
+    { type: 'besser', text: 'Online-Anzeige fragt nur noch alle 3 Minuten ab (weniger Datenverbrauch).' },
+    { type: 'besser', text: 'Startbildschirm: Deine nächsten Termine zeigt nur noch die nächsten 3, vergangene fallen weg.' },
+    { type: 'intern', text: 'Band-Mitglieder werden über eine gemeinsame Funktion geladen (weniger doppelter Code).' },
+    { type: 'besser', text: 'Gelber Entwickler-Knopf ist versteckt: Strg+Umschalt+D, Adresse mit #dev oder 5x schnell auf das Housi-Zeichen tippen.' }
+  ] },
+  { version: 'v0.4.30', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Verpflegung im Gig: Textvorschläge zum Anklicken (Vegi-Menü, veganes Menü, ohne Schweinefleisch, glutenfrei, laktosefrei …).' },
+    { type: 'besser', text: 'Datenschutzerklärung: neuer Punkt zu freiwilligen Angaben zu Ernährung und Allergien und wer sie sieht.' }
+  ] },
+  { version: 'v0.4.29', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Profil: freiwilliger Abschnitt „Ernährung und Allergien“ (Auswahl: vegetarisch, vegan … und 14 Hauptallergene, dazu Freitext). Nur mit Haken „für meine Bands verwenden“ erscheint eine anonyme Zusammenfassung (ohne Namen) als „Ernährung der Band“ auf der Gig-Karte.' }
+  ] },
+  { version: 'v0.4.28', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Finanzen freigegeben: Einnahmen und Ausgaben erfassen, bearbeiten, löschen; Summen pro Jahr, Kategorien, CSV-Export. Neue Rolle „Finanzen“ schaltet Bearbeiten frei (bei neuen Bands Standard; bestehende fügen sie unter Verwaltung → Rollen hinzu). Ohne Rolle sehen Mitglieder nur lesend.' }
+  ] },
+  { version: 'v0.4.27', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Gig-Karte: neuer klappbarer Abschnitt „Teilnehmer“ zeigt die im Termin gewählten Personen (nur wenn welche gewählt sind).' }
+  ] },
+  { version: 'v0.4.26', date: '2026-11-17', items: [
+    { type: 'fix', text: 'Mobil: Der gelbe Entwickler-Knopf ist kleiner und Seiten haben unten Platz, damit er am Seitenende keinen Inhalt mehr verdeckt (Screenshot vom Galaxy XCover7).' }
+  ] },
   { version: 'v0.4.25', date: '2026-11-17', items: [
     { type: 'neu', text: 'Termine und Gigs haben einen Abschnitt „Teilnehmer“ (leer = alle). Wer ausgewählt ist, sieht den Eintrag in „Mein Kalender“ unter „Mir zugeteilt“ (neuer Schalter). „Alle Band-Termine“ zeigt weiterhin alles.' }
   ] },
@@ -30,7 +90,7 @@ const APP_CHANGELOG = [
     { type: 'neu', text: 'Neue Rollen „Setlist“ (Bearbeiten in Setlist und Songs) und „Timetable“ (Bearbeiten in der Timetable), wie die Rolle „Checkliste“. Für neue Bands in der Rollenliste; bestehende Bands fügen sie unter Verwaltung → Rollen hinzu.' }
   ] },
   { version: 'v0.4.19', date: '2026-11-17', items: [
-    { type: 'neu', text: 'Gig-Line-up: Ist eine Band der Timetable auch eine deiner Bands in Stagemate (gleicher Name), erscheint daneben „↗ Band öffnen“ und wechselt zu dieser Band.' }
+    { type: 'neu', text: 'Gig-Line-up: Ist eine Band der Timetable auch eine deiner Bands in StageMate (gleicher Name), erscheint daneben „↗ Band öffnen“ und wechselt zu dieser Band.' }
   ] },
   { version: 'v0.4.18', date: '2026-11-17', items: [
     { type: 'neu', text: 'Standard-Genre pro Band: Admin setzt es unter Verwaltung → Band (Vorschlagsliste aus den Songs). Ohne Eintrag zeigt die App das häufigste Genre der Songs als Hinweis. Neue Songs übernehmen das Genre der Band als Vorgabe.' }
@@ -225,7 +285,7 @@ const APP_CHANGELOG = [
     { type: 'besser', text: 'Facebook-Link und Blüemlifigger-Satz entfernt' },
   ] },
   { version: 'v0.1.5', date: '2026-11-16', items: [
-    { type: 'neu', text: 'Web-Version mit Firebase: eigenes Stagemate-Konto (E-Mail und Passwort), ohne Claude-Konto nutzbar' },
+    { type: 'neu', text: 'Web-Version mit Firebase: eigenes StageMate-Konto (E-Mail und Passwort), ohne Claude-Konto nutzbar' },
     { type: 'neu', text: 'Passwort vergessen: Link zum Zurücksetzen per E-Mail' },
     { type: 'intern', text: 'Firestore-Regeln: nur angemeldete Benutzer, Profile nur durch die Person selbst änderbar' },
   ] },
