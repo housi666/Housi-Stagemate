@@ -1,0 +1,98 @@
+rules_version = '2';
+// StageMate v0.4.43 · Build 65 · 2026-11-17
+// StageMate – Firestore-Regeln (Stand v0.4.39)
+// - Namen von Profilen und Bands: nur erlaubte Zeichen, höchstens 100 Zeichen (okText/nameOk).
+// - Nur angemeldete Benutzer haben Zugriff.
+// - Profile (members) und Admin-Einstellungen (bandadmin) schreibt nur die Person selbst.
+// - Online-Status (presence) sehen nur Mitglieder gemeinsamer Bands.
+// - Verborgene Profilbilder (private) sieht nur die Person selbst.
+// - E-Mail und Telefon (contacts) sehen nur die Person selbst und Mitglieder gemeinsamer Bands.
+// - Termine, Finanzen, Songs und Setlists einer Band sehen und ändern nur ihre Mitglieder.
+// - Band-Tag: 1–3 Zeichen A–Z/0–9, Änderung höchstens alle 5 Minuten.
+// - Entwickler: wer unter developers/<uid> eingetragen ist (nur in der Firebase-Konsole anlegbar),
+//   darf alles LESEN (Band- und Benutzerverwaltung). Schreiben bleibt wie für alle anderen geregelt.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    function memberDoc(uid) { return /databases/$(database)/documents/members/$(uid); }
+    function bandsOf(uid) { return exists(memberDoc(uid)) ? get(memberDoc(uid)).data.get('bandIds', []) : []; }
+    function isMember(bandId) { return signedIn() && bandsOf(request.auth.uid).hasAny([bandId]); }
+    function sharesBand(uid) { return signedIn() && bandsOf(uid).hasAny(bandsOf(request.auth.uid)); }
+    function validTag(t) { return t is string && (t == '' || t.matches('^[A-Z0-9]{1,3}$')); }
+    // Zeichenregeln wie in der App (v0.4.39): Buchstaben, Zahlen, übliche Satzzeichen, keine Emojis, höchstens 100 Zeichen.
+    // Ein unverändert übernommener alter Wert bleibt erlaubt, damit bestehende Daten nicht blockieren.
+    function okText(s) { return s is string && s.size() <= 100 && s.matches('^[\\pL\\p{Mn}\\pN \\t.,;:!?\\x27\\x22()\\x5B\\x5D\\-–—_/&+*#@%=€$°…·’‘„“”«»§]*$'); }
+    function nameOk() {
+      return !('name' in request.resource.data)
+        || (resource != null && resource.data.get('name', null) == request.resource.data.name)
+        || okText(request.resource.data.name);
+    }
+    function isDev() { return signedIn() && exists(/databases/$(database)/documents/developers/$(request.auth.uid)); }
+
+    // Entwickler-Freigabe: nur lesbar für die Person selbst, nie aus der App schreibbar
+    match /developers/{uid} {
+      allow read: if isSelf(uid);
+      allow write: if false;
+    }
+    // Entwickler dürfen alle Dokumente lesen
+    match /{document=**} {
+      allow read: if isDev();
+    }
+
+    match /members/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isSelf(uid) && nameOk();
+      allow delete: if isSelf(uid);
+    }
+    match /contacts/{uid} {
+      allow read: if isSelf(uid) || sharesBand(uid);
+      allow write: if isSelf(uid);
+    }
+    match /presence/{uid} {
+      allow read: if isSelf(uid) || sharesBand(uid);
+      allow write: if isSelf(uid);
+    }
+    match /private/{uid} {
+      allow read, write: if isSelf(uid);
+    }
+    // Eigene Termine auf dem Startbildschirm (v0.4.24)
+    match /private/{uid}/{rest=**} {
+      allow read, write: if isSelf(uid);
+    }
+    match /bandadmin/{uid}/{rest=**} {
+      allow read: if signedIn();
+      allow write: if isSelf(uid);
+    }
+    // Band-Verzeichnis: lesen zum Beitreten per Code, ändern nur durch Mitglieder
+    match /bands/{bandId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && validTag(request.resource.data.get('tag', '')) && nameOk();
+      allow update: if isMember(bandId)
+        && validTag(request.resource.data.get('tag', ''))
+        && nameOk()
+        && (request.resource.data.get('tag', '') == resource.data.get('tag', '')
+            || request.time.toMillis() >= resource.data.get('tagAtMs', 0) + 300000);
+      allow delete: if isMember(bandId);
+    }
+    match /invites/{code} {
+      allow read, write: if signedIn();
+    }
+    match /calendar/{bandId}/{rest=**} {
+      allow read, write: if isMember(bandId);
+    }
+    match /finance/{bandId}/{rest=**} {
+      allow read, write: if isMember(bandId);
+    }
+    // Vorbereitet für das Setlist-Modul (v0.2.0)
+    match /songs/{bandId}/{rest=**} {
+      allow read, write: if isMember(bandId);
+    }
+    match /timetables/{bandId}/{rest=**} {
+      allow read, write: if isMember(bandId);
+    }
+    match /setlists/{bandId}/{rest=**} {
+      allow read, write: if isMember(bandId);
+    }
+  }
+}

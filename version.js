@@ -1,16 +1,19 @@
-/*! StageMate v0.4.42 · Build 64 · 2026-11-17 */
+/*! StageMate v0.4.43 · Build 65 · 2026-11-17 */
 /* StageMate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.42';
-const APP_BUILD = 64;
+const APP_VERSION = 'v0.4.43';
+const APP_BUILD = 65;
 const APP_BUILD_DATE = '2026-11-17';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.43', date: '2026-11-17', items: [
+    { type: 'fix', text: 'Firestore-Regeln: Zeichenprüfung für Namen neu geschrieben (Anführungszeichen und Klammern als Hex-Codes), weil die Firebase-Konsole die erste Fassung nicht speichern konnte.' }
+  ] },
   { version: 'v0.4.42', date: '2026-11-17', items: [
     { type: 'besser', text: 'Phasen neu festgelegt: Alpha bis 0.6.x, Beta ab 0.7.0, Prerelease ab 0.9.0, Release 1.0.0 (Hinweis in den Tipps angepasst).' }
   ] },
