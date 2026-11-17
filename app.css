@@ -1,4 +1,4 @@
-/*! StageMate v0.4.49 · Build 71 · 2026-11-17 */
+/*! StageMate v0.4.50 · Build 72 · 2026-11-17 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1714,3 +1714,5 @@
 /* v0.4.40: Setlist-Ordner und Vorlagen */
 .sl-folder-h { grid-column: 1 / -1; font-weight: 700; font-size: 14px; margin: 10px 0 2px; color: var(--muted, #667); }
 #slFromTpl { max-width: 190px; }
+
+.alpha-wichtig{font-size:34px;font-weight:700;letter-spacing:.08em;color:#c0392b;text-align:center;line-height:1.1;margin:2px 0 6px}

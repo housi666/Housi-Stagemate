@@ -1,16 +1,19 @@
-/*! StageMate v0.4.49 · Build 71 · 2026-11-17 */
+/*! StageMate v0.4.50 · Build 72 · 2026-11-17 */
 /* StageMate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.49';
-const APP_BUILD = 71;
+const APP_VERSION = 'v0.4.50';
+const APP_BUILD = 72;
 const APP_BUILD_DATE = '2026-11-17';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.50', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Info-Fenster beim Start: grosser Titel „WICHTIG“, Hinweis auf Anmeldung mit ungültiger E-Mail zu Testzwecken und Erklärung zum Umgang mit Daten.' }
+  ] },
   { version: 'v0.4.49', date: '2026-11-17', items: [
     { type: 'besser', text: 'Datenschutzerklärung: Speicherung von Ernährung und Allergien neu beschrieben (privates Dokument, Kopie nur mit Haken) und Einsicht durch den Betreiber zur Wartung ausdrücklich genannt.' }
   ] },
