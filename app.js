@@ -1,4 +1,4 @@
-/*! StageMate v0.4.43 · Build 65 · 2026-11-17 */
+/*! StageMate v0.4.49 · Build 71 · 2026-11-17 */
 /* StageMate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -299,6 +299,19 @@
   const FOOD_DIETS = ['vegetarisch', 'vegan', 'ohne Schweinefleisch', 'laktosefrei', 'glutenfrei'];
   const FOOD_ALLERGENS = ['Glutenhaltiges Getreide', 'Krebstiere', 'Eier', 'Fisch', 'Erdnüsse', 'Soja', 'Milch (inkl. Laktose)', 'Schalenfrüchte (Nüsse)', 'Sellerie', 'Senf', 'Sesam', 'Schwefeldioxid und Sulfite', 'Lupinen', 'Weichtiere'];
   const foodKey = f => JSON.stringify(f || null);
+  // Ernährung getrennt gespeichert (v0.4.48): vollständig nur bei dir (private/<uid>/prefs/food); nur mit Haken „für meine Bands verwenden“
+  // zusätzlich eine Kopie in foodshare/<uid>, die Mitglieder gemeinsamer Bands lesen dürfen. Ohne Haken gibt es keine Kopie.
+  let lastFood;
+  async function saveFood(base, f) {
+    const key = foodKey(f);
+    if (key === lastFood) return;
+    const now = new Date().toISOString();
+    if (f) await base.doc('private/' + uid + '/prefs/food').set({ ...f, updatedAt: now });
+    else { try { await base.doc('private/' + uid + '/prefs/food').delete(); } catch (e) {} }
+    if (f && f.share) await base.doc('foodshare/' + uid).set({ diet: f.diet || [], allergens: f.allergens || [], note: f.note || '', updatedAt: now });
+    else { try { await base.doc('foodshare/' + uid).delete(); } catch (e) {} }
+    lastFood = key;
+  }
   function withContacts(base) {
     return {
       collection: p => base.collection(p),
@@ -320,18 +333,21 @@
               }
             }
             await ref.set(rest);
-            if (m[1] === uid && ('email' in d || 'phone' in d || 'food' in d)) {
-              const c = { email: d.email || '', phone: d.phone || '', food: d.food || null };
+            if (m[1] === uid && ('email' in d || 'phone' in d)) {
+              const c = { email: d.email || '', phone: d.phone || '' };
               const key = JSON.stringify(c);
               if (key !== lastContact) { await base.doc('contacts/' + m[1]).set({ ...c, updatedAt: new Date().toISOString() }); lastContact = key; }
             }
+            if (m[1] === uid && 'food' in d) await saveFood(base, d.food || null);
           },
           async delete() {
             await ref.delete();
             if (m[1] === uid) {
               try { await base.doc('contacts/' + m[1]).delete(); } catch (e) {}
               try { await base.doc('private/' + m[1]).delete(); } catch (e) {}
-              lastContact = null; lastPrivate = null;
+              try { await base.doc('private/' + m[1] + '/prefs/food').delete(); } catch (e) {}
+              try { await base.doc('foodshare/' + m[1]).delete(); } catch (e) {}
+              lastContact = null; lastPrivate = null; lastFood = null;
             }
           },
         };
@@ -342,9 +358,20 @@
     if (!p) return p;
     try {
       const c = await db.doc('contacts/' + uid).get();
-      if (c.exists) { const d = c.data(); p.email = d.email || ''; p.phone = d.phone || ''; p.food = d.food || null; lastContact = JSON.stringify({ email: p.email, phone: p.phone, food: p.food || null }); }
+      if (c.exists) {
+        const d = c.data(); p.email = d.email || ''; p.phone = d.phone || ''; lastContact = JSON.stringify({ email: p.email, phone: p.phone });
+        // Alt (bis v0.4.47): Ernährung lag in contacts und war für alle gemeinsamen Bands lesbar → einmalig verschieben
+        if (d.food) {
+          p.food = d.food; lastFood = undefined;
+          try { await saveFood(db, d.food); await db.doc('contacts/' + uid).set({ email: p.email, phone: p.phone, updatedAt: new Date().toISOString() }); }
+          catch (e) { console.warn('[Ernährung] Verschieben fehlgeschlagen', e); }
+        }
+      }
       else if (p.email || p.phone) p._migrateContact = true;   // ältere Profile: Kontakt noch im öffentlichen Dokument
     } catch (e) {}
+    if (!p.food) {
+      try { const fd = await db.doc('private/' + uid + '/prefs/food').get(); if (fd.exists) { const { updatedAt, ...rest } = fd.data(); p.food = rest; lastFood = foodKey(rest); } else lastFood = foodKey(null); } catch (e) {}
+    }
     if (p.photoPublic === false) {
       try { const pr = await db.doc('private/' + uid).get(); if (pr.exists) { p.photo = pr.data().photo || null; lastPrivate = p.photo || ''; } } catch (e) {}
     }
@@ -6414,7 +6441,7 @@
         const foods = [];
         await Promise.all((bandMembersCache[bid] || []).map(async m => {
           if (m.uid === uid) { if (profile.food && profile.food.share) foods.push(profile.food); return; }
-          try { const c = await db.doc('contacts/' + m.uid).get(); const f = c.exists ? c.data().food : null; if (f && f.share) foods.push(f); } catch (e) {}
+          try { const c = await db.doc('foodshare/' + m.uid).get(); if (c.exists) foods.push(c.data()); } catch (e) {}
         }));
         if (!foods.length) return;
         const cnt = k => { const o = {}; foods.forEach(f => (f[k] || []).forEach(v => { o[v] = (o[v] || 0) + 1; })); return Object.entries(o).sort((a, b) => b[1] - a[1]).map(([v, n]) => n + '× ' + v); };
@@ -6790,6 +6817,7 @@
       { icon: '🚧', title: 'Alpha', text: 'StageMate ist in der Alpha-Phase und verändert sich laufend. Geplant: Beta ab 0.7.0, Prerelease ab 0.9.0, Release mit 1.0.0. Die Versionsnummer steht ganz unten links; der Hinweis erscheint auf dem Anmeldebildschirm und lässt sich über das Abzeichen „Alpha“ wieder öffnen.' },
       { icon: '💡', title: 'Vorschau', text: 'Bei Uhr & Datum, Profilbild, Kontaktangaben, Band-Sichtbarkeit und Band-Tag steht eine kleine Glühbirne. Darüberfahren oder antippen zeigt, wie es aussehen wird.' },
       { icon: '⏪', title: 'Vor und Zurück', text: 'Oben links neben dem Seitentitel: ‹ führt zur vorherigen Seite, › wieder vorwärts – wie im Browser.' },
+      { icon: '🔤', title: 'Zeichen in Texten', text: 'In Namen, Titeln und Notizen sind Emojis nicht erlaubt; beim Versuch erscheint oben eine rote Meldung. Nötigenfalls Sonderzeichen wie - / & + verwenden. Umlaute (Ä Ö Ü) funktionieren überall, auch in Word-, PDF- und Textexporten.' },
       { icon: '💬', title: 'Support', text: 'Unten links „Support“ öffnet ein Fenster mit den Links zu Instagram und TikTok (housi_666) – für Fragen, Probleme oder Ideen.' },
       { icon: '🔍', title: 'Bilder gross ansehen', text: 'Ein Klick auf ein Profilbild oder Bandlogo zeigt es gross an. Verborgene Bilder sind verschwommen und mit einem Schloss markiert.' },
       { icon: '🙈', title: 'Profilbild verbergen', text: 'Unter Einstellungen → Sichtbarkeit „Profilbild für andere sichtbar“ ausschalten. Andere sehen dann nur noch ein verschwommenes Bild mit Schloss.' },
@@ -7010,6 +7038,31 @@
        ['Aktiv letzte 7 Tage', P.filter(p => now - (p.lastSeen || 0) < 7 * 864e5).length], ['Ohne Band', M.filter(m => !devArr(m.bandIds).length).length]]
         .forEach(([t, n]) => { const d = el('div', 'dev-stat'); d.append(el('b', null, String(n)), el('span', null, t)); box.append(d); });
       body.append(box, el('div', 'dev-note', 'Stand: ' + devData.at.toLocaleString('de-CH')));
+      const sc = el('button', 'btn', 'Emoji-Prüfung starten'), scOut = el('div', 'dev-scan');
+      sc.addEventListener('click', async () => {
+        sc.disabled = true; scOut.innerHTML = ''; scOut.append(el('div', 'dev-note', 'Prüfe alle Texte …'));
+        const hits = [], bad = v => typeof v === 'string' && !v.startsWith('data:') && (EMOJI_RE.test(v) || v.search(BAD_CHARS_RE) >= 0);
+        const chk = (where, id, o, fields) => fields.forEach(fl => { if (bad(o[fl])) hits.push([where, id, fl, o[fl]]); });
+        B.forEach(b => chk('Band', b.id, b, ['name']));
+        M.forEach(m => chk('Benutzer', m.id, m, ['name', 'nick', 'firstName', 'lastName']));
+        let fails = 0;
+        for (const b of B) {
+          for (const [lbl, path, fl] of [['Termin', `calendar/${b.id}/events`, ['title', 'name', 'place', 'notes']], ['Song', `songs/${b.id}/items`, ['title', 'name', 'artist']],
+              ['Setlist', `setlists/${b.id}/lists`, ['name', 'folder']], ['Timetable', `timetables/${b.id}/lists`, ['name']]]) {
+            const d = await devAll(path);
+            if (d.error) { fails++; continue; }
+            d.forEach(x => chk(lbl + ' (' + (b.name || b.id) + ')', x.id, x, fl));
+          }
+        }
+        sc.disabled = false; scOut.innerHTML = '';
+        scOut.append(el('div', 'dev-note', hits.length ? `${hits.length} Treffer. Nur lesen, es wurde nichts geändert.` : 'Keine Emojis oder unerlaubten Zeichen gefunden.' + (fails ? ` (${fails} Bereiche nicht lesbar)` : '')));
+        if (hits.length) {
+          const tb = el('table'); tb.innerHTML = '<tr><th>Bereich</th><th>ID</th><th>Feld</th><th>Wert</th></tr>';
+          hits.forEach(h => { const tr = el('tr'); h.forEach(v => tr.append(el('td', null, String(v)))); tb.append(tr); });
+          scOut.append(tb);
+        }
+      });
+      body.append(el('h4', null, 'Datenprüfung'), sc, scOut);
       return;
     }
     if (devTab === 'bands') {

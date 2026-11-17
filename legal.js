@@ -1,4 +1,4 @@
-/*! StageMate v0.4.43 · Build 65 · 2026-11-17 */
+/*! StageMate v0.4.49 · Build 71 · 2026-11-17 */
 /* StageMate – Nutzungsbedingungen und Datenschutzerklärung
  * Vorlage, keine Rechtsberatung. Bei Änderungen LEGAL_VERSION anpassen:
  * dann müssen alle Benutzer die neue Fassung erneut akzeptieren.
@@ -77,7 +77,7 @@ const LEGAL_PRIVACY = `
 <p>Mit der Nutzung nimmst du zur Kenntnis, dass Daten dabei ins Ausland bekanntgegeben werden können.</p>
 
 <h4>5. Wer was sieht</h4>
-<p>Mitglieder einer Band sehen die Inhalte dieser Band und die Profile der anderen Mitglieder. Ob E-Mail und Telefon sichtbar sind, stellst du unter <b>Einstellungen</b> ein. Ernährung und Allergien werden nur mit deinem Haken „Für die Verpflegung meiner Bands verwenden“ als anonyme Zusammenfassung ohne Namen in der Verpflegung der Gigs angezeigt. Technisch liegen die Angaben in deinem Kontakt-Dokument, das Mitglieder gemeinsamer Bands über die Datenbank lesen könnten.</p>
+<p>Mitglieder einer Band sehen die Inhalte dieser Band und die Profile der anderen Mitglieder. Ob E-Mail und Telefon sichtbar sind, stellst du unter <b>Einstellungen</b> ein. Ernährung und Allergien werden nur mit deinem Haken „Für die Verpflegung meiner Bands verwenden“ als anonyme Zusammenfassung ohne Namen in der Verpflegung der Gigs angezeigt. Technisch liegen deine vollständigen Angaben in einem privaten Dokument, das nur du lesen kannst. Nur wenn du den Haken setzt, entsteht eine Kopie für deine Bands; ohne Haken gibt es keine. Der Betreiber der App (Entwickler) kann zur Wartung und Fehlersuche technisch alle gespeicherten Daten einsehen, auch private; er nutzt sie nur dafür.</p>
 
 <h4>6. Daten anderer Personen</h4>
 <p>Trägst du Daten anderer Personen ein (z.B. Kontakte bei Gigs), bist du dafür verantwortlich, dass diese damit einverstanden sind.</p>
