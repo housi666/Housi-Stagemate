@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.20 · Build 42 · 2026-11-17 */
+/*! Stagemate v0.4.25 · Build 47 · 2026-11-17 */
 /* Stagemate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -1159,7 +1159,7 @@
     }
   }
   // ----- Persönliche Übersicht: Anzeigen (Widgets), je ein Drittel breit, verschiebbar (animiert) -----
-  const HUB_DEFAULT = ['bands', 'quick', 'nextgig', 'agenda', 'tasks', 'profile', 'settings'];
+  const HUB_DEFAULT = ['bands', 'quick', 'nextgig', 'agenda', 'mycal', 'tasks', 'profile', 'settings'];
   let hubOrder = HUB_DEFAULT.slice();
   try {
     const sv = JSON.parse(ls.get('hubLayout') || 'null');
@@ -1366,17 +1366,109 @@
     box.append(card);
   }
 
+  // ---- Mein Kalender (Startbildschirm): eigene Termine, zugeteilte Checklisten-Punkte, optional Band-Termine
+  // Eigene Termine: private/<uid>/events/<id> { title, date, start, end, note }
+  let hubRaw = {}, hubPers = [], hubCalM = null, hubCalSel = null;
+  const hubCalOpt = k => { try { return ls.get('hubCal_' + k) === '1'; } catch (e) { return false; } };
+  const hubCalSet = (k, v) => { try { ls.set('hubCal_' + k, v ? '1' : '0'); } catch (e) {} };
+  async function hubCalLoad() {
+    try { const q = await db.collection(`private/${uid}/events`).get(); hubPers = q.docs.map(d => ({ id: d.id, ...d.data() })); } catch (e) { hubPers = []; }
+    renderHubCal();
+  }
+  function hubCalItems(from, to) {
+    const out = {}, add = (k, it) => { (out[k] = out[k] || []).push(it); }, inR = d => d >= from && d <= to;
+    if (hubCalOpt('pers') || !ls.get('hubCal_pers')) hubPers.forEach(x => { if (x.date && inR(parseKey(x.date))) add(x.date, { kind: 'pers', ev: x, title: x.title || 'Termin', time: x.start || '' }); });
+    if (hubCalOpt('tasks') || !ls.get('hubCal_tasks')) Object.entries(hubRaw).forEach(([bid, evs]) => evs.forEach(ev => Object.entries(ev.checklists || {}).forEach(([dk, list]) => {
+      const when = dk === '_' ? (ev.kind === 'checklist' && ev.date ? parseKey(ev.date) : null) : parseKey(dk);
+      if (!when || !inR(when)) return;
+      (list || []).forEach(r => {
+        const items = r.items || [];
+        items.forEach(i => { if (!i.done && (i.members || []).includes(uid)) add(dKey(when), { kind: 'task', band: bid, title: i.title, sub: [r.title, ev.title].filter(Boolean).join(' · ') }); });
+        if (!items.length && !r.done && (r.members || []).includes(uid)) add(dKey(when), { kind: 'task', band: bid, title: r.title, sub: ev.title || '' });
+      });
+    })));
+    if (hubCalOpt('mine') || !ls.get('hubCal_mine')) Object.entries(hubRaw).forEach(([bid, evs]) => evs.forEach(ev => { if (ev.date && ev.kind !== 'checklist' && Array.isArray(ev.attendees) && ev.attendees.includes(uid)) occurrences(ev, from, to).forEach(dt => add(dKey(dt), { kind: 'band', band: bid, ev, title: ev.title || 'Termin', time: ev.allDay ? '' : (ev.start || ''), gig: ev.category === 'auftritt', mine: true })); }));
+    if (hubCalOpt('band')) Object.entries(hubRaw).forEach(([bid, evs]) => evs.forEach(ev => { if (ev.date && ev.kind !== 'checklist') occurrences(ev, from, to).forEach(dt => { if (hubCalOpt('mine') || !ls.get('hubCal_mine')) { if (Array.isArray(ev.attendees) && ev.attendees.includes(uid)) return; } add(dKey(dt), { kind: 'band', band: bid, ev, title: ev.title || 'Termin', time: ev.allDay ? '' : (ev.start || ''), gig: ev.category === 'auftritt' }); }); }));
+    return out;
+  }
+  function hubPersEdit(x, dateKey) {
+    const bg = el('div', 'modal-bg'), md = el('div', 'modal'); md.setAttribute('role', 'dialog');
+    const f = (lbl, type, val) => { const w = el('div', 'field'), i = el('input'); i.type = type; i.value = val || ''; w.append(el('label', null, lbl), i); md.append(w); return i; };
+    md.append(el('h3', null, x ? 'Eigenen Termin bearbeiten' : 'Eigener Termin'));
+    const t = f('Titel', 'text', x && x.title), d = f('Datum', 'date', (x && x.date) || dateKey), a = f('Beginn (optional)', 'time', x && x.start), b = f('Ende (optional)', 'time', x && x.end), n = f('Notiz (optional)', 'text', x && x.note);
+    t.maxLength = 80; n.maxLength = 300;
+    const msg = el('div', 'msg'), row = el('div', 'modal-actions'), ok = el('button', 'btn', 'Speichern'), no = el('button', 'btn ghost', 'Abbrechen'), del = el('button', 'btn ghost', 'Löschen'); ok.type = no.type = del.type = 'button';
+    row.append(ok, no); if (x) row.append(del); md.append(msg, row); bg.append(md); document.body.appendChild(bg); t.focus();
+    no.addEventListener('click', () => bg.remove());
+    ok.addEventListener('click', async () => {
+      if (!t.value.trim() || !d.value) { msg.textContent = 'Titel und Datum sind nötig.'; msg.className = 'msg error'; return; }
+      const data = { title: t.value.trim(), date: d.value, start: a.value || '', end: b.value || '', note: n.value.trim(), updatedAt: new Date().toISOString() };
+      try {
+        const ref = x ? db.collection(`private/${uid}/events`).doc(x.id) : db.collection(`private/${uid}/events`).doc();
+        await ref.set(data);
+        if (x) Object.assign(x, data); else hubPers.push({ id: ref.id, ...data });
+        hubCalSel = d.value; hubCalM = new Date(parseKey(d.value).getFullYear(), parseKey(d.value).getMonth(), 1);
+        bg.remove(); renderHubCal(); flash('Gespeichert ✓');
+      } catch (e) { msg.textContent = 'Speichern fehlgeschlagen. Sind die Firestore-Regeln aktuell (private/…/events)?'; msg.className = 'msg error'; }
+    });
+    del.addEventListener('click', async () => {
+      if (!confirm('Termin löschen?')) return;
+      try { await db.collection(`private/${uid}/events`).doc(x.id).delete(); hubPers = hubPers.filter(y => y.id !== x.id); bg.remove(); renderHubCal(); flash('Gelöscht'); } catch (e) { flash('Löschen fehlgeschlagen', true); }
+    });
+  }
+  function renderHubCal() {
+    const box = $('hubCalBox'); if (!box || !profile) return; box.innerHTML = '';
+    const now = dOnly(new Date()); if (!hubCalM) hubCalM = new Date(now.getFullYear(), now.getMonth(), 1);
+    if (!hubCalSel) hubCalSel = dKey(now);
+    const y = hubCalM.getFullYear(), m = hubCalM.getMonth(), first = new Date(y, m, 1), last = new Date(y, m + 1, 0);
+    const items = hubCalItems(first, last), c = ovCfg();
+    const opts = el('div', 'hc-opts');
+    [['pers', 'Eigene Termine'], ['mine', 'Mir zugeteilt'], ['tasks', 'Meine Punkte'], ['band', 'Alle Band-Termine']].forEach(([k, lbl]) => {
+      const lb = el('label', 'hc-opt'), cb = el('input'); cb.type = 'checkbox'; cb.checked = k === 'band' ? hubCalOpt(k) : (ls.get('hubCal_' + k) == null ? true : hubCalOpt(k));
+      cb.addEventListener('change', () => { hubCalSet(k, cb.checked); renderHubCal(); }); lb.append(cb, lbl); opts.append(lb);
+    });
+    const head = el('div', 'hc-head'), pv = el('button', 'btn small ghost', '◀'), nx = el('button', 'btn small ghost', '▶'), ad = el('button', 'btn small', '+ Termin'); pv.type = nx.type = ad.type = 'button';
+    pv.addEventListener('click', () => { hubCalM = new Date(y, m - 1, 1); renderHubCal(); }); nx.addEventListener('click', () => { hubCalM = new Date(y, m + 1, 1); renderHubCal(); });
+    ad.addEventListener('click', () => hubPersEdit(null, hubCalSel));
+    head.append(pv, el('b', null, first.toLocaleDateString('de-CH', { month: 'long', year: 'numeric' })), nx, ad);
+    const grid = el('div', 'hc-grid'); ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].forEach(w => grid.append(el('div', 'hc-w', w)));
+    for (let i = 0; i < (first.getDay() + 6) % 7; i++) grid.append(el('div', 'hc-e'));
+    for (let d = 1; d <= last.getDate(); d++) {
+      const k = dKey(new Date(y, m, d)), n = (items[k] || []).length, b = el('button', 'hc-d' + (k === dKey(now) ? ' today' : '') + (k === hubCalSel ? ' sel' : '') + (n ? ' has' : '')); b.type = 'button';
+      b.append(String(d)); if (n) b.append(el('i', null, String(n)));
+      b.addEventListener('click', () => { hubCalSel = k; renderHubCal(); }); grid.append(b);
+    }
+    const list = el('div', 'hc-list'), day = (items[hubCalSel] || []).slice().sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
+    if (hubCalSel && parseKey(hubCalSel).getMonth() === m) {
+      list.append(el('div', 'hc-day', fmtDateOv(parseKey(hubCalSel), c.date)));
+      if (!day.length) list.append(el('div', 'mnote', 'Nichts an diesem Tag.'));
+      day.forEach(it => {
+        const r = el('button', 'ag-row'); r.type = 'button';
+        const w = el('span', 'ag-what'); w.append(el('b', null, (it.kind === 'pers' ? '👤 ' : it.kind === 'task' ? '☑️ ' : it.gig ? '🎤 ' : '📅 ') + it.title)); if (it.sub) w.append(el('small', null, ' · ' + it.sub));
+        r.append(el('span', 'ag-when', it.time ? fmtHHMM(it.time, c.time) : 'ganztägig'), w);
+        if (it.band && bands[it.band]) { const bl = el('span', 'ag-band'); bl.append(bands[it.band].name); r.append(bl); }
+        r.addEventListener('click', () => {
+          if (it.kind === 'pers') return hubPersEdit(it.ev);
+          if (it.kind === 'task') { currentPage = 'page4'; return enterApp(it.band); }
+          currentPage = it.gig ? 'page3' : 'page2'; if (it.gig) gigsOpen.add(it.ev.id + '|' + hubCalSel); enterApp(it.band);
+        });
+        list.append(r);
+      });
+    }
+    box.append(opts, head, grid, list);
+  }
   // ---- Persönliche Übersicht: Termine und Checklisten-Punkte aus allen Bands
   async function loadHubAgenda() {
     const ids = bandIdsOf(profile), today = dOnly(new Date()), until = addDays(today, 60);
     const ag = $('hubAgendaList'), tk = $('hubTaskList');
-    ag.innerHTML = ''; tk.innerHTML = ''; ag.append(el('div', 'mnote', 'Wird geladen …'));
+    ag.innerHTML = ''; tk.innerHTML = ''; ag.append(el('div', 'mnote', 'Wird geladen …')); hubRaw = {};
     const events = [], tasks = [], gigs = [], gigUntil = addDays(today, 366);
     await Promise.all(ids.map(async id => {
       try {
         const snap = await db.collection(`calendar/${id}/events`).get();
         snap.docs.forEach(d => {
           const ev = { id: d.id, ...d.data() };
+          (hubRaw[id] = hubRaw[id] || []).push(ev);
           if (ev.date && ev.kind !== 'checklist') occurrences(ev, today, until).forEach(dt => events.push({ band: id, ev, date: dt }));
           if (ev.date && ev.kind !== 'checklist' && ev.category === 'auftritt') occurrences(ev, today, gigUntil).forEach(dt => gigs.push({ band: id, ev, date: dt }));
           // eigene, offene Checklisten-Punkte
@@ -1393,6 +1485,7 @@
         });
       } catch (e) {}
     }));
+    hubCalLoad();
     const c = ovCfg();
     const bandLabel = id => { const b = bands[id], wrap = el('span', 'ag-band'); wrap.append(b ? b.name : 'Band'); if (b && b.tag && showOf(b).tag) wrap.append(tagChip(b.tag)); return wrap; };
     events.sort((a, b) => a.date - b.date || (a.ev.start || '').localeCompare(b.ev.start || ''));
@@ -2718,9 +2811,63 @@
   $('slLibFilter').addEventListener('input', renderSlLib);
   $('slLibClose').addEventListener('click', () => $('slLibModal').classList.add('hidden'));
   $('slLibModal').addEventListener('click', e => { if (e.target === $('slLibModal')) $('slLibModal').classList.add('hidden'); });
-  // Export: Text, CSV, JSON
+  // Bühnenmodus: Vollbild, grosse Schrift, Weiterschalten mit Tippen, Pfeiltasten oder Wischen
+  function slStage() {
+    const L = slCur(); if (!L) return;
+    const T = slTimes(L), rows = T.rows; if (!rows.length) return flash('Die Setlist ist leer', true);
+    let i = 0, wl = null;
+    const ov = el('div', 'stage-ov'), tag = el('div', 'stage-top'), main = el('div', 'stage-main'), nxt = el('div', 'stage-next'), bar = el('div', 'stage-bar');
+    const prev = el('button', 'btn', '◀ Zurück'), next = el('button', 'btn', 'Weiter ▶'), close = el('button', 'btn ghost', '✕ Schliessen');
+    [prev, next, close].forEach(b => b.type = 'button'); bar.append(prev, close, next); ov.append(tag, main, nxt, bar); document.body.appendChild(ov);
+    const name = r => (r.it.title || SL_TYPES[r.it.type].label) + (r.it.artist ? ' – ' + r.it.artist : '');
+    function draw() {
+      const r = rows[i];
+      tag.textContent = `${i + 1} / ${rows.length}${r.clock ? ' · ' + r.clock : ''} · ${L.name || 'Setlist'}`;
+      main.innerHTML = ''; main.append(el('div', 'stage-t', (r.num ? r.num + '. ' : '') + (r.it.title || SL_TYPES[r.it.type].label)));
+      const sub = [r.it.artist, r.it.key, r.it.bpm ? r.it.bpm + ' BPM' : '', slFmt(r.it.dur)].filter(Boolean).join(' · '); if (sub) main.append(el('div', 'stage-s', sub));
+      if (r.it.note) main.append(el('div', 'stage-n', r.it.note));
+      nxt.textContent = rows[i + 1] ? 'Als Nächstes: ' + name(rows[i + 1]) : 'Letzter Eintrag';
+      prev.disabled = i === 0; next.disabled = i === rows.length - 1;
+    }
+    const go = d => { i = Math.max(0, Math.min(rows.length - 1, i + d)); draw(); };
+    function end() { document.removeEventListener('keydown', key, true); try { wl && wl.release(); } catch (e) {} ov.remove(); }
+    function key(e) { if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); go(1); } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(-1); } else if (e.key === 'Escape') end(); }
+    document.addEventListener('keydown', key, true);
+    prev.addEventListener('click', e => { e.stopPropagation(); go(-1); }); next.addEventListener('click', e => { e.stopPropagation(); go(1); }); close.addEventListener('click', e => { e.stopPropagation(); end(); });
+    let x0 = null; ov.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
+    ov.addEventListener('touchend', e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1); });
+    main.addEventListener('click', () => go(1));
+    try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { wl = l; }).catch(() => {}); } catch (e) {}
+    draw();
+  }
+  $('slStage').addEventListener('click', slStage);
+  // Import: JSON-Datei (Export aus Stagemate) als neue Setlist
+  $('slImport').addEventListener('click', () => slCan() ? $('slImportFile').click() : slDeny());
+  $('slImportFile').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try {
+      const o = JSON.parse(await f.text());
+      if (!o || !Array.isArray(o.items)) throw new Error('format');
+      const items = o.items.filter(i => i && typeof i === 'object').slice(0, 300).map(i => ({ ...i, id: slId(), type: SL_TYPES[i.type] ? i.type : 'song', title: String(i.title || '').slice(0, 120) }));
+      const nm = String(o.name || 'Import').slice(0, 80);
+      await slNewList({ name: nm, gigId: '', start: /^\d\d:\d\d$/.test(o.start || '') ? o.start : '', targetMin: +o.targetMin || 0, vis: 'intern', items });
+      const L = slCur(); if (L) { L.name = nm + ' (Import)'; slSave(L); renderSetlist(); }
+      flash('Setlist importiert ✓');
+    } catch (err) { flash('Datei konnte nicht gelesen werden (kein Stagemate-JSON)', true); }
+  });
+  // Export: Text, CSV, JSON, PDF
   document.querySelectorAll('[data-slx]').forEach(b => b.addEventListener('click', () => {
     const L = slCur(); if (!L) return; const T = slTimes(L), kind = b.dataset.slx;
+    if (kind === 'pdf') {
+      // Druckansicht: gross und gut lesbar auf der Bühne; „Als PDF speichern“ im Druckdialog
+      const g = calEvents.find(e => e.id === L.gigId), esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const rows = T.rows.map(r => `<tr class="${r.num ? '' : 'x'}"><td class="n">${r.num || ''}</td><td class="t">${esc(r.clock)}</td><td>${esc(r.it.title || SL_TYPES[r.it.type].label)}${r.it.artist ? ' <small>– ' + esc(r.it.artist) + '</small>' : ''}${r.it.note ? '<div class="no">' + esc(r.it.note) + '</div>' : ''}</td><td class="k">${esc(r.it.key)}${r.it.bpm ? ' · ' + r.it.bpm + ' BPM' : ''}</td><td class="d">${slFmt(r.it.dur)}</td></tr>`).join('');
+      const w = window.open('', '_blank');
+      if (!w) return flash('Das Druckfenster wurde blockiert. Bitte Pop-ups erlauben.', true);
+      w.document.write(`<!doctype html><meta charset="utf-8"><title>${esc(L.name || 'Setlist')}</title><style>body{font:16px system-ui,sans-serif;margin:24px;color:#111}h1{margin:0 0 4px}p{margin:0 0 14px;color:#555}table{width:100%;border-collapse:collapse}td{padding:7px 8px;border-bottom:1px solid #ccc;vertical-align:top}.n{width:34px;font-weight:700;font-size:20px}.t{width:60px;color:#555}.k,.d{white-space:nowrap;color:#555;text-align:right}.x td{color:#555;font-style:italic}small{color:#555}.no{font-size:13px;color:#555}@media print{body{margin:10mm}}</style><h1>${esc(L.name || 'Setlist')}</h1><p>${g ? 'Gig: ' + esc(g.title || '') + ' · ' : ''}Gesamt ${slFmt(T.total)}</p><table>${rows}</table>`);
+      w.document.close(); w.focus(); setTimeout(() => { try { w.print(); } catch (e) {} }, 400);
+      return;
+    }
     const gig = calEvents.find(e => e.id === L.gigId), safe = (L.name || 'Setlist').replace(/[^\wäöüÄÖÜ -]+/g, '').trim() || 'Setlist';
     let txt, mime;
     if (kind === 'json') { txt = JSON.stringify({ name: L.name, gig: gig ? gig.title : '', start: L.start || '', targetMin: L.targetMin || 0, items: L.items }, null, 2); mime = 'application/json'; }
@@ -2799,7 +2946,7 @@
     gigs.forEach(e => sel.appendChild(new Option(`${fmtDateOv(parseKey(e.date), ovCfg().date)} · ${e.title || 'Gig'}`, e.id)));
     if (ttSel) sel.value = ttSel;
     const has = !!ttSel, can = ttCan();
-    ['ttAdd', 'ttImport'].forEach(i => { $(i).disabled = !has; $(i).classList.toggle('pv-locked', !can); });
+    ['ttAdd', 'ttImport', 'ttCopy'].forEach(i => { $(i).disabled = !has; $(i).classList.toggle('pv-locked', !can); });
     document.querySelectorAll('[data-ttx]').forEach(b => { b.disabled = !has; });
     const box = $('ttItems'); box.innerHTML = '';
     $('ttEmpty').classList.toggle('hidden', has && ttEntries(ttSel).length > 0);
@@ -2877,6 +3024,23 @@
     });
     return { res, bad };
   }
+  // Vorlage: Ablauf eines anderen Gigs übernehmen (ohne Setlist-Verknüpfung)
+  $('ttCopy').addEventListener('click', () => {
+    if (!ttCan()) return ttDeny(); if (!ttSel) return;
+    const srcs = slGigs().filter(g => g.id !== ttSel && ttEntries(g.id).length);
+    if (!srcs.length) return flash('Kein anderer Gig hat schon eine Timetable', true);
+    const bg = el('div', 'modal-bg'), md = el('div', 'modal'); md.setAttribute('role', 'dialog');
+    md.append(el('h3', null, 'Ablauf übernehmen von …'), el('p', 'hint', 'Die Einträge werden zu den bestehenden hinzugefügt. Setlist-Verknüpfungen werden nicht übernommen.'));
+    const sel = el('select'); srcs.forEach(g => sel.appendChild(new Option(`${fmtDateOv(parseKey(g.date), ovCfg().date)} · ${g.title || 'Gig'} (${ttEntries(g.id).length} Einträge)`, g.id)));
+    const row = el('div', 'modal-actions'), ok = el('button', 'btn', 'Übernehmen'), no = el('button', 'btn ghost', 'Abbrechen'); ok.type = no.type = 'button';
+    row.append(no, ok); md.append(sel, row); bg.append(md); document.body.appendChild(bg);
+    no.addEventListener('click', () => bg.remove());
+    ok.addEventListener('click', () => {
+      const TL = ttList(ttSel);
+      ttEntries(sel.value).forEach(x => { const { setlistId, ...rest } = x; TL.entries.push({ ...clone(rest), id: slId() }); });
+      ttSave(ttSel); bg.remove(); renderTimetable(); flash('Ablauf übernommen ✓');
+    });
+  });
   $('ttImport').addEventListener('click', () => { if (!ttCan()) return ttDeny(); $('ttImpText').value = ''; $('ttImpMsg').textContent = ''; $('ttImpFile').value = ''; $('ttImpModal').classList.remove('hidden'); });
   const ttImpClose = () => $('ttImpModal').classList.add('hidden');
   $('ttImpClose').addEventListener('click', ttImpClose); $('ttImpCancel').addEventListener('click', ttImpClose);
@@ -4317,6 +4481,20 @@
   let evEditing = null;       // { ev?, occ? }
   let evWeekdays = new Set();
   function gigFlash() { const b = $('gigAdd'); b.classList.remove('flash3'); void b.offsetWidth; b.classList.add('flash3'); setTimeout(() => b.classList.remove('flash3'), 2400); }
+  // Teilnehmer eines Termins (leer = alle)
+  async function evAttBuild(sel) {
+    const box = $('evAtt'); box.innerHTML = ''; const bid = currentBand;
+    const draw = () => {
+      box.innerHTML = '';
+      (bandMembersCache[bid] || []).forEach(m => { const lb = el('label', 'hc-opt'), cb = el('input'); cb.type = 'checkbox'; cb.value = m.uid; cb.checked = sel.includes(m.uid); cb.addEventListener('change', sum); lb.append(cb, m.name || 'Unbekannt'); box.append(lb); });
+      sum();
+    };
+    const sum = () => { const n = box.querySelectorAll('input:checked').length; $('secAttSum').textContent = n ? n + ' ausgewählt' : 'alle'; };
+    if (!bandMembersCache[bid]) {
+      try { const q = await db.collection('members').where('bandIds', 'array-contains', bid).get(); bandMembersCache[bid] = q.docs.map(d => ({ uid: d.id, ...d.data() })).filter(m => isActiveIn(m, bid, bands[bid].cfg)); } catch (e) {}
+    }
+    draw();
+  }
   function openEventModal(opts) {
     // Gigs werden nur auf der Gig-Seite bearbeitet: aus dem Kalender dorthin springen
     if (opts.ev && opts.ev.category === 'auftritt' && opts.ev.kind !== 'checklist' && !opts.gigOnly && !opts.checklist) {
@@ -4355,6 +4533,7 @@
     const sc = (ev && ev.schedule) || {};
     $('evGetIn').value = sc.getin || ''; $('evAufbau').value = sc.aufbau || ''; $('evSoundcheck').value = sc.soundcheck || ''; $('evLinecheck').value = sc.linecheck || '';
     $('evCatering').value = ev ? ev.catering || '' : ''; $('evCateringTime').value = ev ? ev.cateringTime || '' : '';
+    evAttBuild(ev && Array.isArray(ev.attendees) ? ev.attendees : []);
     $('evChecklist').checked = !!(ev && ev.checklist) || (!ev && !!opts.checklist);
     evLinkList = ev && Array.isArray(ev.links) ? ev.links.slice() : [];
     evContactList = ev && Array.isArray(ev.contacts) ? ev.contacts.map(c => ({ ...c })) : [];
@@ -4640,6 +4819,7 @@
       parking: $('evCat').value === 'auftritt' || (evEditing && evEditing.gigOnly) ? $('evParking').value.trim() : (ev && ev.parking) || '',
       mapsUrl: $('evCat').value === 'auftritt' || (evEditing && evEditing.gigOnly) ? normUrl($('evMaps').value) : (ev && ev.mapsUrl) || '',
       schedule: { getin: $('evGetIn').value, aufbau: $('evAufbau').value, soundcheck: $('evSoundcheck').value, linecheck: $('evLinecheck').value },
+      attendees: [...$('evAtt').querySelectorAll('input:checked')].map(i => i.value),
       catering: $('evCatering').value.trim(), cateringTime: /^\d\d:\d\d$/.test($('evCateringTime').value) ? $('evCateringTime').value : '',
       links: evLinkList.map(normUrl).filter(Boolean),
       contacts: $('evCat').value === 'auftritt' || (evEditing && evEditing.gigOnly) ? evContactList.map(c => ({ name: (c.name || '').trim(), role: (c.role || '').trim(), phone: (c.phone || '').trim(), email: (c.email || '').trim() })).filter(c => c.name || c.phone || c.email) : ((ev && ev.contacts) || []),

@@ -1,4 +1,4 @@
-/*! Stagemate v0.4.20 · Build 42 · 2026-11-17 */
+/*! Stagemate v0.4.25 · Build 47 · 2026-11-17 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1661,3 +1661,31 @@
 .lu-wrap { display: flex; gap: 8px; align-items: stretch; }
 .lu-wrap .lu-row { flex: 1; }
 .lu-go { white-space: nowrap; }
+
+/* v0.4.22 Bühnenmodus */
+.stage-ov { position: fixed; inset: 0; z-index: 9999; background: #000; color: #fff; display: flex; flex-direction: column; padding: 16px; }
+.stage-top { font-size: 14px; color: #aaa; text-align: center; }
+.stage-main { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 14px; cursor: pointer; overflow: auto; }
+.stage-t { font-size: clamp(36px, 9vw, 110px); font-weight: 800; line-height: 1.1; }
+.stage-s { font-size: clamp(18px, 3.5vw, 40px); color: #cfcfcf; }
+.stage-n { font-size: clamp(16px, 3vw, 32px); color: #e8a33d; white-space: pre-wrap; }
+.stage-next { text-align: center; font-size: clamp(16px, 2.6vw, 28px); color: #aaa; padding: 10px 0; }
+.stage-bar { display: flex; gap: 10px; justify-content: space-between; }
+.stage-bar .btn { min-width: 120px; padding: 14px 18px; font-size: 18px; }
+
+/* v0.4.24 Mein Kalender */
+.hc-opts { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; margin-bottom: 8px; }
+.hc-opt { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+.hc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.hc-head b { flex: 1; text-align: center; text-transform: capitalize; }
+.hc-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.hc-w { text-align: center; font-size: 11px; color: var(--muted); }
+.hc-d { position: relative; aspect-ratio: 1 / 0.8; border: 1px solid var(--border); border-radius: 7px; background: transparent; color: inherit; cursor: pointer; font-size: 13px; padding: 0; }
+.hc-d.today { border-color: var(--accent); font-weight: 700; }
+.hc-d.sel { background: var(--accent); color: #fff; }
+.hc-d.has i { position: absolute; right: 3px; bottom: 1px; font-size: 10px; font-style: normal; color: var(--accent); }
+.hc-d.sel.has i { color: #fff; }
+.hc-list { margin-top: 10px; }
+.hc-day { font-weight: 700; margin-bottom: 6px; }
+
+.ev-att { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 4px 0 8px; }

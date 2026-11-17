@@ -1,16 +1,31 @@
-/*! Stagemate v0.4.20 · Build 42 · 2026-11-17 */
+/*! Stagemate v0.4.25 · Build 47 · 2026-11-17 */
 /* Stagemate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.20';
-const APP_BUILD = 42;
+const APP_VERSION = 'v0.4.25';
+const APP_BUILD = 47;
 const APP_BUILD_DATE = '2026-11-17';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.4.25', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Termine und Gigs haben einen Abschnitt „Teilnehmer“ (leer = alle). Wer ausgewählt ist, sieht den Eintrag in „Mein Kalender“ unter „Mir zugeteilt“ (neuer Schalter). „Alle Band-Termine“ zeigt weiterhin alles.' }
+  ] },
+  { version: 'v0.4.24', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Startbildschirm: neue Anzeige „Mein Kalender“ (Monatsansicht) mit eigenen Terminen, deinen zugeteilten Checklisten-Punkten und optional Band-Terminen (Schalter). „+ Termin“ legt persönliche Termine an (nur für dich sichtbar). Braucht die neue Firestore-Regel für private/<uid>/events.' }
+  ] },
+  { version: 'v0.4.23', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Timetable: „Aus Gig kopieren“ übernimmt den Ablauf eines anderen Gigs als Vorlage (ohne Setlist-Verknüpfung, zu den bestehenden Einträgen hinzugefügt).' }
+  ] },
+  { version: 'v0.4.22', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Setlist: „🎤 Bühnenmodus“ – Vollbild mit grosser Schrift, aktuellem Eintrag, Notiz und nächstem Song; Weiterschalten per Tippen, Pfeiltasten/Leertaste oder Wischen; Bildschirm bleibt wach, wo der Browser es erlaubt.' }
+  ] },
+  { version: 'v0.4.21', date: '2026-11-17', items: [
+    { type: 'neu', text: 'Setlist: Knopf „PDF / Drucken“ öffnet eine grosse, gut lesbare Druckansicht (im Druckdialog „Als PDF speichern“). Neu: „JSON importieren“ liest eine exportierte Setlist als neue Setlist ein.' }
+  ] },
   { version: 'v0.4.20', date: '2026-11-17', items: [
     { type: 'neu', text: 'Neue Rollen „Setlist“ (Bearbeiten in Setlist und Songs) und „Timetable“ (Bearbeiten in der Timetable), wie die Rolle „Checkliste“. Für neue Bands in der Rollenliste; bestehende Bands fügen sie unter Verwaltung → Rollen hinzu.' }
   ] },
