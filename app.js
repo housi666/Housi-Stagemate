@@ -1,4 +1,4 @@
-/*! StageMate v0.5.1 · Build 75 · 2026-11-18 */
+/*! StageMate v0.5.3 · Build 77 · 2026-11-18 */
 /* StageMate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -6945,16 +6945,21 @@
   }
   syncDevBtn();
   function openDevModal() { $('devModal').classList.remove('hidden'); setMsg($('devMsg'), ''); $('devPw').value = ''; setTimeout(() => $('devId').focus(), 30); }
-  // Versteckter Zugang: Ctrl+Shift+D, URL-Endung #dev oder 5x schnell auf das Housi-Zeichen tippen
+  // Versteckter Zugang: Ctrl+Shift+D, URL-Endung #dev oder 7x auf das Housi-Zeichen klicken (ab dem 4. Klick läuft ein Zähler, wie beim Android-Entwicklermodus)
   const devAllowed = () => !$('devPanel') || $('devPanel').classList.contains('hidden');
   document.addEventListener('keydown', e => { if (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd') && devAllowed()) { e.preventDefault(); openDevModal(); } });
   if (location.hash === '#dev') { history.replaceState(null, '', location.pathname + location.search); setTimeout(openDevModal, 600); }
-  { let taps = [], hm = document.querySelector('.housi-mark');
-    if (hm) document.addEventListener('click', ev => { const r = hm.getBoundingClientRect(); if (!r.width || ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return; const t = Date.now(); taps = taps.filter(x => t - x < 2500); taps.push(t); if (taps.length >= 5) { taps = []; if (devAllowed()) openDevModal(); } }); }
+  { const NEED = 7; let n = 0, last = 0, hm = document.querySelector('.housi-mark');
+    if (hm) document.addEventListener('click', ev => {
+      const r = hm.getBoundingClientRect(); if (!r.width || ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return;
+      if (!devAllowed()) return;
+      const t = Date.now(); n = (t - last > 2000) ? 1 : n + 1; last = t;
+      if (n >= NEED) { n = 0; openDevModal(); return; }
+      if (n >= NEED - 3) { const left = NEED - n; flash(`Noch ${left} ${left === 1 ? 'Klick' : 'Klicks'} bis zur Entwickler-Anmeldung`); }
+    }); }
   const closeDevModal = () => $('devModal').classList.add('hidden');
   
   ['devX', 'devCancel'].forEach(k => $(k).addEventListener('click', closeDevModal));
-  $('devModal').addEventListener('click', e => { if (e.target === $('devModal')) closeDevModal(); });
   $('devId').addEventListener('input', () => { $('devMailHint').textContent = Data.usesFirebase && $('devId').value.trim() ? 'Firebase-Konto: ' + devEmail($('devId').value) : ''; });
   $('devPw').addEventListener('keydown', e => { if (e.key === 'Enter') $('devGo').click(); });
   $('devGo').addEventListener('click', async () => {
@@ -7283,9 +7288,9 @@
     if (fbPane) { $('registerSlot').appendChild(form); fbPane.remove(); fbPane = null; }
   }
 
-  // Zufällige Testband (TBA-01 … TBA-05) für neue Testpersonen
+  // Zufällige Testband (Codes TBA01X … TBA10X) für neue Testpersonen
   async function pickTestBand() {
-    const codes = ['TBA01X', 'TBA02X', 'TBA03X', 'TBA04X', 'TBA05X'];
+    const codes = ['TBA01X', 'TBA02X', 'TBA03X', 'TBA04X', 'TBA05X', 'TBA06X', 'TBA07X', 'TBA08X', 'TBA09X', 'TBA10X'];
     for (let i = codes.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [codes[i], codes[j]] = [codes[j], codes[i]]; }
     for (const c of codes) { try { const b = await findBandByCode(c); if (b) return b; } catch (e) {} }
     return null;

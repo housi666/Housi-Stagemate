@@ -1,16 +1,23 @@
-/*! StageMate v0.5.1 · Build 75 · 2026-11-18 */
+/*! StageMate v0.5.3 · Build 77 · 2026-11-18 */
 /* StageMate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.5.1';
-const APP_BUILD = 75;
+const APP_VERSION = 'v0.5.3';
+const APP_BUILD = 77;
 const APP_BUILD_DATE = '2026-11-18';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.5.3', date: '2026-11-18', items: [
+    { type: 'besser', text: 'Entwickler-Anmeldung: Das Fenster schliesst nur noch über X oder Abbrechen, nicht mehr durch Klick daneben.' },
+    { type: 'besser', text: 'Versteckter Zugang: 7 Klicks auf das Housi-Zeichen (statt 5). Ab dem 4. Klick läuft ein Zähler („Noch 3 Klicks …“), wie beim Android-Entwicklermodus.' }
+  ] },
+  { version: 'v0.5.2', date: '2026-11-18', items: [
+    { type: 'besser', text: 'Neue Testdaten: 50 Testpersonen mit echt klingenden Namen, 10 Bands mit Namen statt Codes (Beitritts-Codes TBA01X bis TBA10X), 20 Veranstaltungen mit Setlists, Timetables, Checklisten, Teilnehmern, dazu Proben, Songs, Finanzen und Ernährungsangaben. Zufällige Testband wählt aus allen 10 Bands.' }
+  ] },
   { version: 'v0.5.1', date: '2026-11-18', items: [
     { type: 'besser', text: '„Schnell erstellen“ heisst jetzt „Springe zu“: die Knöpfe führen direkt zur Gig-, Termin-, Setlist- und Checklisten-Seite der Band (ohne ein Erstell-Fenster zu öffnen).' },
     { type: 'besser', text: 'Profil: Abstand zwischen den Links (Datenschutz usw.) und dem Speichern-Knopf.' }

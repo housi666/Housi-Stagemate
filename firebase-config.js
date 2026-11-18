@@ -1,4 +1,4 @@
-/*! StageMate v0.5.1 · Build 75 · 2026-11-18 */
+/*! StageMate v0.5.3 · Build 77 · 2026-11-18 */
 /* StageMate Web – Verbindung zu Firebase (Projekt housi-stagemate).
  * Diese Werte sind nicht geheim; geschützt werden die Daten durch die Firestore-Regeln. */
 window.STAGEMATE_FIREBASE = {

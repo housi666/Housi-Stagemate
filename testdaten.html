@@ -21,17 +21,18 @@
 <body>
 <div class="wrap">
   <h1>StageMate <span>Testdaten</span></h1>
-  <p>Erstellt <b>30 Testkonten</b> (<code>testuid-01@stagemate.test</code> … <code>testuid-30@stagemate.test</code>, Nickname = E-Mail-Adresse),
-  <b>5 Bands</b> (<code>TBA-01</code> … <code>TBA-05</code>), <b>7 Gigs</b> mit allen Angaben (je 4 Bands pro Gig) und pro Band und Gig eine Checkliste.</p>
+  <p>Erstellt <b>50 Testkonten</b> (<code>testuid-01@stagemate.test</code> … <code>testuid-50@stagemate.test</code>, mit echt klingenden Namen),
+  <b>10 Bands</b> (Beitritts-Codes <code>TBA01X</code> … <code>TBA10X</code>), <b>20 Veranstaltungen</b> mit je 4 Bands, Setlists, Timetables, Checklisten, Teilnehmern,
+  dazu Proben, Songs, Finanzen und Ernährungsangaben.</p>
   <div class="box">
     <div>Passwort aller Testkonten: <code id="pw"></code></div>
-    <p style="margin:10px 0 0">Läuft in einem eigenen Hintergrund-Zugang – dein eigenes Konto bleibt angemeldet. Damit du Admin von TBA-01 wirst, musst du in StageMate (im gleichen Browser) mit deinem Konto angemeldet sein. Dauer: etwa 1–2 Minuten.
+    <p style="margin:10px 0 0">Läuft in einem eigenen Hintergrund-Zugang – dein eigenes Konto bleibt angemeldet. Damit du Admin der ersten Band wirst, musst du in StageMate (im gleichen Browser) mit deinem Konto angemeldet sein. Dauer: etwa 4–6 Minuten.
     <b>Nach dem Erstellen diese Datei wieder von GitHub löschen</b>, damit niemand sonst sie ausführt.</p>
     <div id="meBox" style="margin-top:12px; padding:10px 12px; border-radius:10px; background:#0b0c10; border:1px solid #2c2e38">Prüfe dein Konto …</div>
-    <label style="display:flex; gap:8px; align-items:center; margin-top:10px; color:#c9cbd6"><input type="checkbox" id="meAdmin" checked> Mich als <b>Admin (Gründer)</b> von <b>TBA-01</b> eintragen</label>
+    <label style="display:flex; gap:8px; align-items:center; margin-top:10px; color:#c9cbd6"><input type="checkbox" id="meAdmin" checked> Mich als <b>Admin (Gründer)</b> der ersten Band (Nachtfahrer) eintragen</label>
     <div style="margin-top:14px">
       <button class="go" id="go">Testdaten erstellen</button>
-      <button class="go" id="meOnly" style="background:#3b82f6;color:#fff">Nur mich als Admin von TBA-01 eintragen</button>
+      <button class="go" id="meOnly" style="background:#3b82f6;color:#fff">Nur mich als Admin der ersten Band eintragen</button>
       <button class="del" id="del">Testdaten löschen</button>
     </div>
     <div class="bar"><div id="bar"></div></div>
@@ -46,12 +47,12 @@
 <script>
 (() => {
   const PW = 'Stagemate-Test1';  // Passwort unverändert (nicht umbenennen: bestehende Testkonten)
-  const N_USERS = 30, N_BANDS = 5, N_GIGS = 7;
+  const N_USERS = 50, N_BANDS = 10, N_GIGS = 20, N_SONGS = 14;
   const $ = id => document.getElementById(id);
   $('pw').textContent = PW;
   const pad = n => String(n).padStart(2, '0');
   const email = i => `testuid-${pad(i)}@stagemate.test`;
-  const nick = i => `TESTUID-${pad(i)}@stagemate.test`;
+  const nick = i => `${first(i)}${last(i)}`;
   const bandId = b => `tba-${pad(b)}`;
   const logEl = $('log');
   const log = (t, cls) => { const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = t; logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight; };
@@ -63,7 +64,7 @@
   let me = null;
   MA.onAuthStateChanged(u => {
     me = u && !/@stagemate\.test$/.test(u.email || '') ? u : null;
-    $('meBox').innerHTML = me ? `✅ Angemeldet als <b>${me.email}</b> – wird Admin von TBA-01.` : '⚠️ Nicht angemeldet: Melde dich zuerst in StageMate (gleicher Browser) mit deinem eigenen Konto an und lade diese Seite neu. Ohne Anmeldung werden nur die Testdaten erstellt.';
+    $('meBox').innerHTML = me ? `✅ Angemeldet als <b>${me.email}</b> – wird Admin der ersten Band (Nachtfahrer).` : '⚠️ Nicht angemeldet: Melde dich zuerst in StageMate (gleicher Browser) mit deinem eigenen Konto an und lade diese Seite neu. Ohne Anmeldung werden nur die Testdaten erstellt.';
   });
   // Hintergrund-Zugang für die Testkonten
   const app = firebase.initializeApp(window.STAGEMATE_FIREBASE, 'stagemate-testdaten');
@@ -71,12 +72,20 @@
   const now = () => new Date().toISOString();
 
   // ---------- Verteilung ----------
+  const BANDS = [
+    ['Nachtfahrer', 'NAF', 'Rock'], ['Eisenherz', 'EIS', 'Metal'], ['Blaue Stunde', 'BLS', 'Pop'], ['Die Sandkörner', 'SAK', 'Folk'], ['Rotes Rauschen', 'ROR', 'Punk'],
+    ['Funkenflug', 'FUF', 'Funk'], ['Alpenglühen', 'ALG', 'Folk'], ['Kaltes Feuer', 'KAF', 'Metal'], ['Sunset Delta', 'SUD', 'Blues'], ['Mondscheinpiraten', 'MOP', 'Punk'],
+  ];
+  const FIRST = ['Mia', 'Noah', 'Lena', 'Luca', 'Anna', 'Elias', 'Sara', 'Jonas', 'Nina', 'Finn', 'Laura', 'Nico', 'Julia', 'Leon', 'Sophie', 'Marco', 'Lea', 'Dario', 'Elin', 'Tim', 'Selina', 'Yannick', 'Jana', 'Reto', 'Corinne'];
+  const LAST = ['Keller', 'Meier', 'Huber', 'Schmid', 'Brunner', 'Weber', 'Steiner', 'Gerber', 'Baumann', 'Frei', 'Zimmermann', 'Moser', 'Fischer', 'Roth', 'Suter', 'Graf', 'Wyss', 'Egger', 'Liechti', 'Arnold'];
+  const first = i => FIRST[(i - 1) % FIRST.length];
+  const last = i => LAST[(i * 3 + Math.floor((i - 1) / FIRST.length)) % LAST.length];
   const ROLES = ['Gesang', 'Gitarre', 'Bass', 'Schlagzeug', 'Keyboard', 'Backing Vocals', 'Percussion', 'Bläser', 'Technik'];
-  const DEFAULT_ROLES = ['Gründer', 'Gesang', 'Backing Vocals', 'Gitarre', 'Bass', 'Schlagzeug', 'Percussion', 'Keyboard', 'Bläser', 'Technik', 'Organisation', 'Checkliste'];
-  const founder = b => b;                          // TESTUID-01 gründet TBA-01 usw.
+  const DEFAULT_ROLES = ['Gründer', 'Gesang', 'Backing Vocals', 'Gitarre', 'Bass', 'Schlagzeug', 'Percussion', 'Keyboard', 'Bläser', 'Technik', 'Organisation', 'Checkliste', 'Setlist', 'Timetable', 'Finanzen'];
+  const founder = b => b;                          // Testperson 01 gründet Band 1 usw.
   const bandsOfUser = i => {
-    const out = [((i - 1) % N_BANDS) + 1];         // jede Person ist in einer Hauptband (6 pro Band)
-    if (i % 4 === 0) { const x = ((i + 1) % N_BANDS) + 1; if (!out.includes(x)) out.push(x); }   // jede 4. Person in einer zweiten Band
+    const out = [((i - 1) % N_BANDS) + 1];         // jede Person hat eine Hauptband (5 pro Band)
+    if (i % 3 === 0) { const x = ((i + 3) % N_BANDS) + 1; if (!out.includes(x)) out.push(x); }   // jede 3. Person in einer zweiten Band
     return out;
   };
   const membersOf = b => { const l = []; for (let i = 1; i <= N_USERS; i++) if (bandsOfUser(i).includes(b)) l.push(i); return l; };
@@ -86,9 +95,13 @@
     const r = [ROLES[(i * 3 + b) % ROLES.length]];
     if (ms[0] === i) r.push('Organisation');
     if (ms[1] === i) r.push('Checkliste');
+    if (ms[2] === i) r.push('Finanzen');
+    if (ms[3] === i) r.push('Setlist', 'Timetable');
     return r;
   };
-  const gigBands = g => { const skip = ((g - 1) % N_BANDS) + 1; return [1, 2, 3, 4, 5].filter(b => b !== skip); };
+  const bname = b => BANDS[b - 1][0];
+  const gigBands = g => [0, 3, 6, 8].map(o => ((g - 1 + o) % N_BANDS) + 1);   // je Gig 4 verschiedene Bands, jede Band 8 Gigs
+  const gigsOf = b => [...Array(N_GIGS)].map((_, k) => k + 1).filter(g => gigBands(g).includes(b));
   const VENUES = [
     ['Stadtfest Bern', 'Bundesplatz', 'Bundesplatz 3, 3011 Bern', 'Parkhaus Casino, Einfahrt Kochergasse'],
     ['Rock im Hof', 'Kulturhof Schloss Köniz', 'Muhlernstrasse 9, 3098 Köniz', 'Parkplatz beim Schloss, 10 Plätze reserviert'],
@@ -97,49 +110,95 @@
     ['Herbstfest Luzern', 'Schüür', 'Tribschenstrasse 1, 6005 Luzern', 'Laden vor dem Eingang, danach Parkhaus Bahnhof'],
     ['Metal Night Basel', 'Sommercasino', 'Münchensteinerstrasse 1, 4052 Basel', '2 Parkplätze im Hof'],
     ['Jahresabschluss St. Gallen', 'Grabenhalle', 'Unterer Graben 17, 9000 St. Gallen', 'Parkhaus Unterer Graben'],
-  ];
-  const gigDate = g => { const d = new Date(); d.setDate(d.getDate() + 5 + g * 7); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+    ['Winterfest Chur', 'Klibühni', 'Kalchbühlweg 4, 7000 Chur', 'Gratis Parkplätze am Rhein'],
+    ['Altstadtnacht Solothurn', 'Kofmehl', 'Hans-Huber-Strasse 12, 4500 Solothurn', 'Anlieferung Rückseite'],
+    ['Festival Biel', 'Gaskessel', 'Seevorstadt 6, 2502 Biel', 'Parkplatz Esplanade'],
+    ['Sommernacht Aarau', 'Kiff', 'Tellistrasse 118, 5000 Aarau', 'Hof hinter dem Gebäude'],
+    ['Rocknacht Winterthur', 'Gaswerk', 'Untere Schöntalstrasse 19, 8406 Winterthur', 'Parkhaus Archhöfe'],
+    ['Heimspiel Burgdorf', 'Schlossmatt', 'Lyssachstrasse 112, 3400 Burgdorf', 'Ladezone vor der Halle'],
+    ['Uferfest Neuenburg', 'Case a Chocs', 'Rue de Pierre-a-Mazel 11, 2000 Neuenburg', 'Parking du Port'],
+    ['Bergfest Interlaken', 'Kursaal', 'Strandbadstrasse 44, 3800 Interlaken', 'Parkplatz Kursaal'],
+    ['Kellerkonzert Fribourg', 'Fri-Son', 'Route de la Fonderie 13, 1700 Freiburg', 'Hof Fri-Son'],
+    ['Waldbühne Zug', 'Galvanik', 'Gotthardstrasse 20, 6300 Zug', 'Parkhaus Metalli'],
+    ['Seenachtsfest Rapperswil', 'Alte Fabrik', 'Klosterstrasse 10, 8640 Rapperswil', 'Parkplatz Seequai'],
+    ['Schlossfest Thun', 'Mühle Hunziken', 'Dorfstrasse 1, 3076 Worb', 'Wiese hinter der Mühle'],
+    ['Jahresende Bern', 'Dachstock', 'Neubrückstrasse 8, 3012 Bern', 'Reitschule Vorplatz, 15 Minuten laden']];
+  const gigDay = g => { const d = new Date(); d.setDate(d.getDate() + (g - 3) * 6); return d; };   // Gig 1 und 2 liegen in der Vergangenheit
+  const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const gigDate = g => ymd(gigDay(g));
   let cid = 0; const id = () => 't' + Date.now().toString(36) + (cid++).toString(36);
+  const STARTS = ['19:00', '20:00', '21:00', '22:00'], ENDS = ['19:45', '20:45', '21:45', '23:00'];
+  const slotOf = (g, b) => gigBands(g).indexOf(b);
   function checklistFor(g, b, uidOf) {
     const ms = membersOf(b).map(uidOf);
     const it = (title, k, done) => ({ id: id(), title, members: [ms[k % ms.length]], done: !!done, createdBy: ms[0], createdAt: now() });
     return [
-      { id: id(), title: 'Material', createdBy: ms[0], createdAt: now(), members: [], items: [it('Kabel und Adapter', 1, g % 2), it('Ersatzsaiten und Sticks', 2), it('Merch-Kiste', 3, true)] },
-      { id: id(), title: 'Organisation', createdBy: ms[0], createdAt: now(), members: [], items: [it('Setlist drucken', 0, true), it('Fahrplan an alle', 1), it('Gästeliste melden', 4)] },
-      { id: id(), title: 'Nach dem Gig', createdBy: ms[0], createdAt: now(), members: [ms[2 % ms.length]], items: [] },
+      { id: id(), title: 'Material', createdBy: ms[0], createdAt: now(), members: [], items: [it('Kabel und Adapter', 1, g % 2), it('Ersatzsaiten und Sticks', 2), it('Merch-Kiste', 3, g < 3)] },
+      { id: id(), title: 'Organisation', createdBy: ms[0], createdAt: now(), members: [], items: [it('Setlist drucken', 0, g < 4), it('Fahrplan an alle', 1, g < 3), it('Gästeliste melden', 4)] },
+      { id: id(), title: 'Nach dem Gig', createdBy: ms[0], createdAt: now(), members: [ms[2 % ms.length]], items: [it('Gage abholen', 2), it('Equipment verladen', 3)] },
     ];
   }
   function gigEvent(g, b, uidOf) {
     const [title, venue, address, parking] = VENUES[(g - 1) % VENUES.length];
-    const date = gigDate(g), fb = uidOf(founder(b));
-    const others = gigBands(g).map(x => `TBA-${pad(x)}`);
-    const slot = gigBands(g).indexOf(b);
-    const start = ['19:00', '20:00', '21:00', '22:00'][slot] || '20:00', end = ['19:45', '20:45', '21:45', '23:00'][slot] || '21:00';
+    const date = gigDate(g), fb = uidOf(founder(b)), slot = slotOf(g, b);
+    const others = gigBands(g).map(bname);
+    const start = STARTS[slot], end = ENDS[slot];
     return {
-      title: `Testgig ${pad(g)} – ${title}`, date, allDay: false, start, end,
+      title: `${title}`, date, allDay: false, start, end,
       location: venue, address, parking, mapsUrl: 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address),
-      notes: `Line-up: ${others.join(', ')}. Unser Slot: ${start}–${end}. Testdaten von StageMate.`,
-      schedule: { getin: ['15:00', '15:30', '16:00', '16:30'][slot] || '16:00', aufbau: ['15:30', '16:00', '16:30', '17:00'][slot] || '16:30', soundcheck: ['16:30', '17:00', '17:30', '18:00'][slot] || '17:30', linecheck: ['18:45', '19:45', '20:45', '21:45'][slot] || '19:45' },
+      notes: `Line-up: ${others.join(', ')}. Unser Slot: ${start} bis ${end}. Testdaten von StageMate.`,
+      schedule: { getin: ['15:00', '15:30', '16:00', '16:30'][slot], aufbau: ['15:30', '16:00', '16:30', '17:00'][slot], soundcheck: ['16:30', '17:00', '17:30', '18:00'][slot], linecheck: ['18:45', '19:45', '20:45', '21:45'][slot] },
       catering: 'Abendessen ab 18:00 im Backstage, 2 Getränke pro Person, Wasser auf der Bühne.',
       links: ['https://www.example.ch/veranstaltung-' + g, 'https://www.example.ch/tickets-' + g],
       contacts: [
-        { name: 'Veranstalter Test ' + pad(g), role: 'Veranstalter', phone: '079 555 0' + pad(g) + ' 00', email: `veranstalter${pad(g)}@example.ch` },
-        { name: 'Technik Test ' + pad(g), role: 'Tontechnik', phone: '078 444 0' + pad(g) + ' 11', email: `technik${pad(g)}@example.ch` },
+        { name: 'Veranstalter ' + last(g + 20), role: 'Veranstalter', phone: '079 555 ' + pad(g) + ' 00', email: `veranstalter${pad(g)}@example.ch` },
+        { name: 'Technik ' + last(g + 7), role: 'Tontechnik', phone: '078 444 ' + pad(g) + ' 11', email: `technik${pad(g)}@example.ch` },
       ],
       docs: [], category: 'auftritt', repeat: { freq: 'none' }, exdates: [],
+      attendees: membersOf(b).filter((x, k) => k < 5 || g % 2).map(uidOf),
       checklist: true, checklists: { [date]: checklistFor(g, b, uidOf) },
       createdBy: fb, createdAt: now(), updatedBy: fb, updatedAt: now(), testData: true,
     };
   }
+  function probeEvent(b, k, uidOf) {
+    const d = new Date(); d.setDate(d.getDate() + 2 + k * 9 + b % 4); const fb = uidOf(founder(b));
+    return { title: k ? 'Probe: neue Songs' : 'Probe: Setlist durchspielen', date: ymd(d), allDay: false, start: '19:30', end: '22:00', location: 'Proberaum ' + bname(b), address: 'Industriestrasse ' + (10 + b) + ', 3000 Bern',
+      notes: 'Testdaten: Probe vor dem nächsten Auftritt.', category: 'probe', repeat: { freq: 'none' }, exdates: [], attendees: membersOf(b).map(uidOf), links: [], contacts: [], docs: [],
+      createdBy: fb, createdAt: now(), updatedBy: fb, updatedAt: now(), testData: true };
+  }
 
-  // 10 Testsongs pro Band
-  const SONG_TITLES = ['Nachtfahrt', 'Neonlicht', 'Letzter Zug', 'Staub und Gold', 'Echo', 'Sturmwarnung', 'Funkenflug', 'Blaue Stunde', 'Rückwärtsgang', 'Zugabe für dich'];
-  const GENRES = ['Rock', 'Punk', 'Pop', 'Blues', 'Metal'];
-  const RELS = [['album', 'Test-Album'], ['ep', 'Test-EP'], ['single', 'Test-Single']];
+  // 14 Songs pro Band
+  const SONG_POOL = ['Nachtfahrt', 'Neonlicht', 'Letzter Zug', 'Staub und Gold', 'Echo', 'Sturmwarnung', 'Funkenflug', 'Blaue Stunde', 'Rückwärtsgang', 'Zugabe für dich', 'Glasherz', 'Wintersonne', 'Rost und Rauch', 'Geisterstadt', 'Kopfüber', 'Atemlos im Regen', 'Tiefer Fall', 'Heimweg', 'Schwarze Rosen', 'Stille Post', 'Feuerprobe', 'Niemandsland', 'Zeitlupe', 'Offene Rechnung', 'Mitternachtsblau', 'Wellenbrecher', 'Letzte Runde', 'Papierflieger', 'Donnerstag', 'Nordlicht', 'Alte Wunden', 'Funken im Wind', 'Kartenhaus', 'Bergwind', 'Auf der Flucht', 'Lichtjahre', 'Sandburg', 'Wieder da', 'Ohne Netz', 'Sonntagskind'];
+  const RELS = [['album', 'Alben'], ['ep', 'EP'], ['single', 'Single']];
   function testSongs(b) {
-    return SONG_TITLES.map((t, k) => { const r = RELS[(k + b) % 3]; return { id: `testsong-${pad(b)}-${pad(k + 1)}`, d: {
-      title: t, artist: 'TBA-' + pad(b), relType: r[0], album: r[1] + ' ' + (1 + (k % 3)), year: 2018 + ((k + b) % 8), genre: GENRES[(k + b) % GENRES.length],
+    const g = BANDS[b - 1][2];
+    return [...Array(N_SONGS)].map((_, k) => { const t = SONG_POOL[(b * 4 + k * 3) % SONG_POOL.length], r = RELS[(k + b) % 3]; return { id: `testsong-${pad(b)}-${pad(k + 1)}`, d: {
+      title: t, artist: bname(b), relType: r[0], album: r[0] === 'album' ? bname(b) + ' Live' : (r[0] === 'ep' ? 'Nacht EP' : t), year: 2017 + ((k + b) % 9), genre: g,
       dur: 170 + ((k * 37 + b * 11) % 120), key: ['Am', 'C', 'Em', 'G', 'D'][k % 5], bpm: 90 + ((k * 13 + b * 7) % 70) } }; });
+  }
+  function testSetlist(b, g, songs, uidOf) {
+    const n = 9 + (g % 3), picks = [...Array(n)].map((_, k) => songs[(g * 2 + k * 3) % songs.length]);
+    const uniq = []; picks.forEach(p => { if (!uniq.includes(p)) uniq.push(p); });
+    const items = [{ id: 'i' + id(), type: 'intro', title: 'Intro', dur: 60, note: '' }];
+    uniq.forEach((s, k) => {
+      items.push({ id: 'i' + s.id + '-' + g, type: 'song', ...s.d, note: k === 2 ? 'Gitarre wechseln' : '' });
+      if (k === 3) items.push({ id: 'i' + id(), type: 'ansage', title: 'Ansage', dur: 30, note: 'Begrüssung' });
+      if (k === 6 && g % 2) items.push({ id: 'i' + id(), type: 'zwischen', title: 'Zwischenteil', dur: 60, note: '' });
+    });
+    items.push({ id: 'i' + id(), type: 'outro', title: 'Outro', dur: 60, note: '' });
+    return { name: `${VENUES[(g - 1) % VENUES.length][0]}`, gigId: 'testgig-' + pad(g), start: STARTS[slotOf(g, b)], targetMin: 40, vis: g % 3 ? 'intern' : 'public', dupAck: '', createdBy: uidOf(founder(b)), createdAt: now(), updatedAt: now(), testData: true, items };
+  }
+  function finEntries(b, uidOf) {
+    const out = [], fb = uidOf(founder(b));
+    gigsOf(b).forEach((g, k) => { if (gigDay(g) > new Date(Date.now() + 40 * 864e5)) return;
+      out.push({ id: `testfin-${pad(b)}-g${pad(g)}a`, d: { type: 'in', amount: 300 + ((b * 70 + g * 40) % 500), date: gigDate(g), time: '', title: 'Gage ' + VENUES[(g - 1) % VENUES.length][0], cat: 'Gage', gigId: 'testgig-' + pad(g), note: '' } });
+      out.push({ id: `testfin-${pad(b)}-g${pad(g)}b`, d: { type: 'out', amount: 40 + ((b * 13 + g * 7) % 80), date: gigDate(g), time: '', title: 'Benzin und Parkgebühr', cat: 'Transport', gigId: 'testgig-' + pad(g), note: '' } });
+      if (k % 2) out.push({ id: `testfin-${pad(b)}-g${pad(g)}c`, d: { type: 'in', amount: 60 + ((g * 11) % 120), date: gigDate(g), time: '', title: 'Merch-Verkauf', cat: 'Merch', gigId: 'testgig-' + pad(g), note: 'T-Shirts und CDs' } });
+    });
+    const d1 = new Date(); d1.setDate(d1.getDate() - 20);
+    out.push({ id: `testfin-${pad(b)}-p1`, d: { type: 'out', amount: 180, date: ymd(d1), time: '', title: 'Proberaum Monatsmiete', cat: 'Proberaum', gigId: '', note: '' } });
+    out.push({ id: `testfin-${pad(b)}-p2`, d: { type: 'out', amount: 65 + b * 5, date: ymd(d1), time: '', title: 'Ersatzsaiten und Kabel', cat: 'Material & Technik', gigId: '', note: '' } });
+    return out.map(e => ({ id: e.id, d: { ...e.d, updatedBy: fb, updatedAt: now(), testData: true } }));
   }
 
   // ---------- Anmeldung im Hintergrund ----------
@@ -155,8 +214,8 @@
 
   async function create() {
     const uids = {};
-    const total = N_USERS * 2 + N_BANDS * 3; let done = 0; const step = () => bar(++done / total);
-    log('1/5 Konten und Profile …');
+    const total = N_USERS * 2 + N_BANDS * 6; let done = 0; const step = () => bar(++done / total);
+    log('1/7 Konten und Profile …');
     for (let i = 1; i <= N_USERS; i++) { uids[i] = await signAs(i, true); step(); }
     const uidOf = i => uids[i];
     for (let i = 1; i <= N_USERS; i++) {
@@ -164,16 +223,22 @@
       const bs = bandsOfUser(i), memberships = {};
       bs.forEach(b => { memberships[bandId(b)] = { roles: rolesFor(i, b), joinedAt: now(), share: { email: true, phone: i % 3 !== 0 } }; });
       await F.doc('members/' + uids[i]).set({
-        name: nick(i), nickKey: nick(i).toLowerCase(), firstName: 'Test', lastName: 'Person ' + pad(i),
-        puid: 'PUID-' + String(90000000 + i), photoPublic: true,
+        name: nick(i), nickKey: nick(i).toLowerCase(), firstName: first(i), lastName: last(i),
+        puid: 'PUID-' + String(90000000 + i), photoPublic: i % 5 !== 0,
         bandIds: bs.map(bandId), memberships, lastBand: bandId(bs[0]),
         terms: { version: typeof LEGAL_VERSION !== 'undefined' ? LEGAL_VERSION : '2026-11-16', acceptedAt: now() },
         createdAt: now(), updatedAt: now(), testData: true,
       });
-      await F.doc('contacts/' + uids[i]).set({ email: email(i), phone: '079 000 00 ' + pad(i), updatedAt: now() });
-      log(`  ✓ ${nick(i)} → ${bs.map(b => 'TBA-' + pad(b)).join(', ')}`); step();
+      await F.doc('contacts/' + uids[i]).set({ email: email(i), phone: '079 5' + pad(i % 100) + ' ' + pad((i * 7) % 100) + ' ' + pad((i * 13) % 100), updatedAt: now() });
+      // Ernährung (jede 2. Person) – vollständig privat, jede 4. Person zusätzlich als Kopie für die Bands
+      if (i % 2 === 0) {
+        const f = { diet: [['vegetarisch'], ['vegan'], ['laktosefrei'], ['glutenfrei'], ['ohne Schweinefleisch']][i % 5], allergens: i % 4 === 0 ? ['Erdnüsse', 'Sesam'] : (i % 6 === 0 ? ['Milch (inkl. Laktose)'] : []), note: i % 4 === 0 ? 'Bitte keine Nussspuren' : '', share: i % 4 === 0, updatedAt: now() };
+        await F.doc(`private/${uids[i]}/prefs/food`).set(f);
+        if (f.share) await F.doc('foodshare/' + uids[i]).set({ diet: f.diet, allergens: f.allergens, note: f.note, updatedAt: now() });
+      }
+      log(`  ✓ ${first(i)} ${last(i)} (${email(i)}) → ${bs.map(bname).join(', ')}`); step();
     }
-    log('2/5 Bands …');
+    log('2/7 Bands …');
     for (let b = 1; b <= N_BANDS; b++) {
       await signAs(founder(b));
       const assignments = {}; membersOf(b).forEach(i => { assignments[uids[i]] = rolesFor(i, b); });
@@ -183,52 +248,59 @@
         logo: null, admins: [], updatedAt: now(), rolesAt: now(),
       });
       await F.doc('bands/' + bandId(b)).set({
-        name: 'TBA-' + pad(b), code: 'TBA0' + b + 'X', tag: 'TB' + b, tagAt: now(), tagAtMs: 0,
+        name: bname(b), code: 'TBA' + pad(b) + 'X', genre: BANDS[b - 1][2], tag: BANDS[b - 1][1], tagAt: now(), tagAtMs: 0,
         show: { logo: true, name: true, tag: true }, createdBy: uids[founder(b)], createdAt: now(), testData: true,
       });
-      log(`  ✓ TBA-${pad(b)} (Code TBA0${b}X, Admin ${nick(founder(b))}, ${membersOf(b).length} Mitglieder)`); step();
+      log(`  ✓ ${bname(b)} [${BANDS[b - 1][1]}] (Code TBA${pad(b)}X, Admin ${first(founder(b))} ${last(founder(b))}, ${membersOf(b).length} Mitglieder)`); step();
     }
-    log('3/5 Gigs mit Checklisten …');
+    log('3/7 Veranstaltungen und Proben mit Checklisten …');
     for (let b = 1; b <= N_BANDS; b++) {
       await signAs(founder(b));
-      for (let g = 1; g <= N_GIGS; g++) if (gigBands(g).includes(b)) await F.doc(`calendar/${bandId(b)}/events/testgig-${pad(g)}`).set(gigEvent(g, b, uidOf));
-      log(`  ✓ TBA-${pad(b)}: ${[...Array(N_GIGS)].map((_, k) => k + 1).filter(g => gigBands(g).includes(b)).length} Gigs`); step();
+      for (let g = 1; g <= 30; g++) await F.doc(`calendar/${bandId(b)}/events/testgig-${pad(g)}`).delete().catch(() => {});   // alte Testgigs
+      for (const g of gigsOf(b)) await F.doc(`calendar/${bandId(b)}/events/testgig-${pad(g)}`).set(gigEvent(g, b, uidOf));
+      for (let k = 0; k < 2; k++) await F.doc(`calendar/${bandId(b)}/events/testprobe-${pad(b)}-${k + 1}`).set(probeEvent(b, k, uidOf));
+      log(`  ✓ ${bname(b)}: ${gigsOf(b).length} Gigs, 2 Proben`); step();
     }
-    log('4/5 Songs und Setlist (nur Bands ohne Setlist) …');
+    log('4/7 Songs …');
     for (let b = 1; b <= N_BANDS; b++) {
       await signAs(founder(b));
-      const have = await F.collection(`setlists/${bandId(b)}/lists`).get();
-      if (!have.empty) { log(`  – TBA-${pad(b)}: hat schon eine Setlist, übersprungen`); step(); continue; }
+      for (let k = 1; k <= 14; k++) await F.doc(`songs/${bandId(b)}/items/testsong-${pad(b)}-${pad(k)}`).set({ ...testSongs(b)[k - 1].d, draft: false, updatedAt: now(), testData: true });
+      log(`  ✓ ${bname(b)}: ${N_SONGS} Songs`); step();
+    }
+    log('5/7 Setlists (eine pro Gig und Band) …');
+    for (let b = 1; b <= N_BANDS; b++) {
+      await signAs(founder(b));
       const songs = testSongs(b);
-      for (const s of songs) await F.doc(`songs/${bandId(b)}/items/${s.id}`).set({ ...s.d, draft: false, updatedAt: now(), testData: true });
-      await F.doc(`setlists/${bandId(b)}/lists/testset-${pad(b)}`).set({
-        name: `Testset ${pad(b)}`, gigId: 'testgig-' + pad([...Array(N_GIGS)].map((_, k) => k + 1).find(g => gigBands(g).includes(b))), start: '20:00', targetMin: 40, vis: 'intern', dupAck: '', createdBy: uids[founder(b)], createdAt: now(), updatedAt: now(), testData: true,
-        items: songs.map(s => ({ id: 'i' + s.id, type: 'song', ...s.d, note: '' })),
-      });
-      log(`  ✓ TBA-${pad(b)}: ${songs.length} Songs und 1 Setlist`); step();
+      await F.doc(`setlists/${bandId(b)}/lists/testset-${pad(b)}`).delete().catch(() => {});   // alte Test-Setlist
+      for (const g of gigsOf(b)) await F.doc(`setlists/${bandId(b)}/lists/testset-${pad(b)}-${pad(g)}`).set(testSetlist(b, g, songs, uidOf));
+      log(`  ✓ ${bname(b)}: ${gigsOf(b).length} Setlists`); step();
     }
-    log('5/5 Timetables (pro Gig die Line-up-Zeiten, verknüpft mit Bands und Setlists) …');
+    log('6/7 Timetables (Line-up mit Bandnamen, Setlist verknüpft) …');
     for (let b = 1; b <= N_BANDS; b++) {
       try {
         await signAs(founder(b));
-        // Setlist der Band: Test-Setlist, sonst die erste vorhandene
-        const lists = await F.collection(`setlists/${bandId(b)}/lists`).get();
-        const docs = lists.docs.map(d => ({ id: d.id, ...d.data() }));
-        const sl = docs.find(x => x.id === `testset-${pad(b)}`) || docs[0] || null;
-        const firstG = [...Array(N_GIGS)].map((_, k) => k + 1).find(g => gigBands(g).includes(b));
-        if (sl && !sl.gigId) await F.doc(`setlists/${bandId(b)}/lists/${sl.id}`).set({ gigId: 'testgig-' + pad(firstG) }, { merge: true });
-        for (let g = 1; g <= N_GIGS; g++) {
-          if (!gigBands(g).includes(b)) continue;
-          const starts = ['19:00', '20:00', '21:00', '22:00'], ends = ['19:45', '20:45', '21:45', '23:00'];
-          const entries = gigBands(g).map((x, k) => ({ id: `tt-${pad(g)}-${pad(x)}`, time: starts[k] || '20:00', band: `TBA-${pad(x)}`, end: ends[k] || '', dur: 0, songs: x === b && sl ? ((sl.items || []).filter(i => i.type === 'song').length || 10) : 0, setlistId: x === b && sl ? sl.id : '', note: x === b ? 'Unser Slot' : '' }));
+        for (const g of gigsOf(b)) {
+          const sl = testSetlist(b, g, testSongs(b), uidOf), nSongs = sl.items.filter(i => i.type === 'song').length;
+          const entries = gigBands(g).map((x, k) => ({ id: `tt-${pad(g)}-${pad(x)}`, time: STARTS[k], band: bname(x), end: ENDS[k], dur: 0, songs: x === b ? nSongs : 8 + ((x + g) % 4), setlistId: x === b ? `testset-${pad(b)}-${pad(g)}` : '', note: x === b ? 'Unser Slot' : '' }));
           await F.doc(`timetables/${bandId(b)}/lists/testgig-${pad(g)}`).set({ gigId: `testgig-${pad(g)}`, entries, updatedAt: now(), testData: true });
         }
-        log(`  ✓ TBA-${pad(b)}: Timetables${sl ? ', Setlist „' + (sl.name || sl.id) + '“ verknüpft' : ' (keine Setlist vorhanden)'}`);
-      } catch (e) { log(`  ✗ TBA-${pad(b)}: ${e.code || e.message}${/permission/i.test(e.code || e.message) ? ' – firestore.rules in der Firebase-Konsole veröffentlichen (Regel „timetables“)' : ''}`, 'err'); }
+        log(`  ✓ ${bname(b)}: ${gigsOf(b).length} Timetables`);
+      } catch (e) { log(`  ✗ ${bname(b)}: ${e.code || e.message}${/permission/i.test(e.code || e.message) ? ' – firestore.rules in der Firebase-Konsole veröffentlichen (Regel „timetables“)' : ''}`, 'err'); }
+      step();
+    }
+    log('7/7 Finanzen …');
+    for (let b = 1; b <= N_BANDS; b++) {
+      try {
+        await signAs(founder(b));
+        const fe = finEntries(b, uidOf);
+        for (const e of fe) await F.doc(`finance/${bandId(b)}/entries/${e.id}`).set(e.d);
+        log(`  ✓ ${bname(b)}: ${fe.length} Buchungen`);
+      } catch (e) { log(`  ✗ ${bname(b)}: ${e.code || e.message}`, 'err'); }
+      step();
     }
     await A.signOut();
     if ($('meAdmin').checked && me) await makeMeAdmin();
-    else if ($('meAdmin').checked) log('Hinweis: Du warst nicht angemeldet – später mit „Nur mich als Admin von TBA-01 eintragen“ nachholen.', 'err');
+    else if ($('meAdmin').checked) log('Hinweis: Du warst nicht angemeldet – später mit „Nur mich als Admin der ersten Band eintragen“ nachholen.', 'err');
     log('Fertig! Melde dich z.B. mit ' + email(1) + ' und dem Passwort oben an.', 'ok');
   }
 
@@ -236,14 +308,14 @@
   async function makeMeAdmin() {
     if (!me) throw new Error('Nicht angemeldet – melde dich zuerst in StageMate mit deinem Konto an und lade diese Seite neu.');
     const B = bandId(1);
-    log('Trage ' + me.email + ' als Admin von TBA-01 ein …');
+    log('Trage ' + me.email + ' als Admin von ' + bname(1) + ' ein …');
     const mref = MF.doc('members/' + me.uid), ms = await mref.get();
     if (!ms.exists) throw new Error('Dein Profil fehlt – registriere dich zuerst in StageMate.');
     const d = ms.data();
     const bandIds = [...new Set([...(d.bandIds || []), B])];
     await mref.set({ ...d, bandIds, memberships: { ...(d.memberships || {}), [B]: { roles: ['Gründer', 'Organisation'], joinedAt: now(), share: { email: true, phone: true } } }, lastBand: B, updatedAt: now() });
     const bref = MF.doc('bands/' + B), bs = await bref.get();
-    if (!bs.exists) throw new Error('TBA-01 gibt es noch nicht – zuerst die Testdaten erstellen.');
+    if (!bs.exists) throw new Error(bname(1) + ' gibt es noch nicht – zuerst die Testdaten erstellen.');
     const band = bs.data(), old = band.createdBy;
     const oc = old ? await MF.doc(`bandadmin/${old}/bands/${B}`).get() : null;
     const cfg = oc && oc.exists ? oc.data() : { roles: DEFAULT_ROLES, access: { defaults: {}, members: {} }, extra: {}, removed: {}, admins: [] };
@@ -252,7 +324,7 @@
     assignments[me.uid] = ['Gründer', 'Organisation'];
     await MF.doc(`bandadmin/${me.uid}/bands/${B}`).set({ ...cfg, assignments, updatedAt: now(), rolesAt: now() });
     await bref.set({ ...band, createdBy: me.uid, previousAdmin: old || null });
-    log('  ✓ Du bist jetzt Admin (Gründer) von TBA-01. Lade StageMate neu (Ctrl + F5).', 'ok');
+    log('  ✓ Du bist jetzt Admin (Gründer) von ' + bname(1) + '. Lade StageMate neu (Ctrl + F5).', 'ok');
   }
   async function removeMe() {
     if (!me) return;
@@ -261,35 +333,34 @@
       const mref = MF.doc('members/' + me.uid), ms = await mref.get();
       if (ms.exists) { const d = ms.data(); const memberships = { ...(d.memberships || {}) }; delete memberships[B]; await mref.set({ ...d, bandIds: (d.bandIds || []).filter(x => x !== B), memberships, lastBand: d.lastBand === B ? null : d.lastBand }); }
       await MF.doc(`bandadmin/${me.uid}/bands/${B}`).delete();
-      log('  ✓ Dein Konto aus TBA-01 entfernt', 'ok');
+      log('  ✓ Dein Konto aus der ersten Band entfernt', 'ok');
     } catch (e) { log('  – Dein Konto: ' + (e.code || e.message), 'err'); }
   }
 
   async function remove() {
-    log('Lösche Gigs und Bands …');
+    log('Lösche Bands und ihre Daten …');
     let total = N_BANDS + N_USERS, done = 0; const step = () => bar(++done / total);
     const uids = {};
+    const delAll = async path => { const sn = await F.collection(path).get(); for (const d of sn.docs) await d.ref.delete().catch(() => {}); };
     for (let b = 1; b <= N_BANDS; b++) {
       try {
         const u = await signAs(founder(b)); uids[founder(b)] = u;
-        for (let g = 1; g <= N_GIGS; g++) await F.doc(`calendar/${bandId(b)}/events/testgig-${pad(g)}`).delete().catch(() => {});
-        for (let k = 1; k <= 10; k++) await F.doc(`songs/${bandId(b)}/items/testsong-${pad(b)}-${pad(k)}`).delete().catch(() => {});
-        for (let g = 1; g <= N_GIGS; g++) await F.doc(`timetables/${bandId(b)}/lists/testgig-${pad(g)}`).delete().catch(() => {});
-        await F.doc(`setlists/${bandId(b)}/lists/testset-${pad(b)}`).delete().catch(() => {});
+        for (const p of [`calendar/${bandId(b)}/events`, `songs/${bandId(b)}/items`, `timetables/${bandId(b)}/lists`, `setlists/${bandId(b)}/lists`, `finance/${bandId(b)}/entries`]) await delAll(p).catch(() => {});
         await F.doc('bands/' + bandId(b)).delete().catch(() => {});
         await F.doc(`bandadmin/${u}/bands/${bandId(b)}`).delete().catch(() => {});
-        log(`  ✓ TBA-${pad(b)}`);
-      } catch (e) { log(`  – TBA-${pad(b)}: ${e.code || e.message}`, 'err'); }
+        log(`  ✓ ${bname(b)}`);
+      } catch (e) { log(`  – ${bname(b)}: ${e.code || e.message}`, 'err'); }
       step();
     }
     log('Lösche Konten …');
     for (let i = 1; i <= N_USERS; i++) {
       try {
         const u = await signAs(i);
-        for (const c of ['members', 'contacts', 'presence', 'private']) await F.doc(`${c}/${u}`).delete().catch(() => {});
+        for (const c of ['members', 'contacts', 'presence', 'private', 'foodshare']) await F.doc(`${c}/${u}`).delete().catch(() => {});
+        await F.doc(`private/${u}/prefs/food`).delete().catch(() => {});
         await A.currentUser.delete();
-        log(`  ✓ ${nick(i)}`);
-      } catch (e) { log(`  – ${nick(i)}: ${e.code || e.message}`, 'err'); }
+        log(`  ✓ ${first(i)} ${last(i)}`);
+      } catch (e) { log(`  – ${email(i)}: ${e.code || e.message}`, 'err'); }
       step();
     }
     await removeMe();
@@ -301,7 +372,7 @@
     try { await fn(); } catch (e) { log('Fehler: ' + (e.code || e.message), 'err'); }
     finally { $('go').disabled = $('del').disabled = $('meOnly').disabled = false; }
   };
-  $('go').addEventListener('click', () => { if (confirm('30 Testkonten, 5 Bands, 7 Gigs, Songs, Setlists und Timetables erstellen?')) run(create); });
+  $('go').addEventListener('click', () => { if (confirm('50 Testkonten, 10 Bands, 20 Veranstaltungen mit Setlists, Timetables, Checklisten und Finanzen erstellen?')) run(create); });
   $('meOnly').addEventListener('click', () => run(makeMeAdmin));
   $('del').addEventListener('click', () => { if (confirm('Alle Testdaten und Testkonten löschen?')) run(remove); });
 })();
