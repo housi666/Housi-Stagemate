@@ -1,16 +1,20 @@
-/*! StageMate v0.5.0 · Build 74 · 2026-11-18 */
+/*! StageMate v0.5.1 · Build 75 · 2026-11-18 */
 /* StageMate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.5.0';
-const APP_BUILD = 74;
+const APP_VERSION = 'v0.5.1';
+const APP_BUILD = 75;
 const APP_BUILD_DATE = '2026-11-18';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.5.1', date: '2026-11-18', items: [
+    { type: 'besser', text: '„Schnell erstellen“ heisst jetzt „Springe zu“: die Knöpfe führen direkt zur Gig-, Termin-, Setlist- und Checklisten-Seite der Band (ohne ein Erstell-Fenster zu öffnen).' },
+    { type: 'besser', text: 'Profil: Abstand zwischen den Links (Datenschutz usw.) und dem Speichern-Knopf.' }
+  ] },
   { version: 'v0.5.0', date: '2026-11-18', items: [
     { type: 'neu', text: 'Registrieren mit Profil: Profilbild, Nickname, Name, Vorname, E-Mail, Telefon, Passwort (zweimal). Danach bist du automatisch angemeldet und landest in der persönlichen Übersicht. Keine Band nötig.' },
     { type: 'neu', text: 'Optional: einer zufälligen Testband beitreten (Rolle Organisation). Hinweis zur erfundenen E-Mail im Formular (kein Passwort-Zurücksetzen möglich).' },

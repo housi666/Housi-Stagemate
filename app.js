@@ -1,4 +1,4 @@
-/*! StageMate v0.5.0 · Build 74 · 2026-11-18 */
+/*! StageMate v0.5.1 · Build 75 · 2026-11-18 */
 /* StageMate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -1382,18 +1382,17 @@
   }
 
   // ---- Persönliche Übersicht: Schnell erstellen (Band wählen, dann das passende Fenster öffnen)
-  const QUICK = { gig: { page: 'page3', btn: 'gigAdd', label: 'Gig erstellen' }, event: { page: 'page2', btn: 'calAdd', label: 'Termin erstellen' }, checklist: { page: 'page4', btn: 'clpAdd', label: 'Checkliste erstellen' }, setlist: { page: 'page6', btn: 'slNew', label: 'Setlist erstellen' } };
+  const QUICK = { gig: { page: 'page3', btn: 'gigAdd', label: 'Gig-Seite' }, event: { page: 'page2', btn: 'calAdd', label: 'Terminseite' }, checklist: { page: 'page4', btn: 'clpAdd', label: 'Checklisten-Seite' }, setlist: { page: 'page6', btn: 'slNew', label: 'Setlist-Seite' } };
   function quickGo(kind, bandId) {
     const q = QUICK[kind]; $('quickModal').classList.add('hidden');
     currentPage = q.page; enterApp(bandId);
-    setTimeout(() => { const b = $(q.btn); if (b) b.click(); }, 450);
   }
   document.querySelectorAll('[data-quick]').forEach(b => b.addEventListener('click', () => {
     const kind = b.dataset.quick;
     const ids = bandIdsOf(profile);
     if (!ids.length) return flash('Tritt zuerst einer Band bei oder gründe eine.', true);
     if (ids.length === 1) return quickGo(kind, ids[0]);
-    $('quickTitle').textContent = QUICK[kind].label + ': für welche Band?';
+    $('quickTitle').textContent = 'Springe zu ' + QUICK[kind].label + ': welche Band?';
     const box = $('quickBands'); box.innerHTML = '';
     ids.forEach(id => {
       const bd = bands[id]; if (!bd) return;
@@ -6755,7 +6754,7 @@
         T('🏠', 'Persönliche Übersicht', 'Hier landest du nach dem Anmelden. Sie gehört nur dir: keine Seitenleiste, keine Band. Oben die Kopfzeile mit Uhr, Tipps, Support und Abmelden.'),
         T('🎸', 'Band öffnen', 'Die Bandseite öffnest du nur hier: Klick auf eine Band unter „Deine Bands“. Die zuletzt geöffnete steht zuoberst.'),
         T('🧩', 'Anzeigen verschieben', 'Jede Anzeige (Bands, nächster Gig, Termine, Checklisten-Punkte, Profil, Einstellungen) hat links oben einen Griff ⠿. Packen und an einen anderen Platz ziehen – die anderen rücken sanft nach, Lücken werden automatisch nach oben geschlossen. Die Anordnung bleibt in diesem Browser gespeichert; „Anordnung zurücksetzen“ stellt die Grundaufteilung wieder her.'),
-        T('⚡', 'Schnell erstellen', 'Gig, Termin oder Checkliste direkt von hier erstellen: Band wählen (bei mehreren Bands), dann öffnet sich das passende Fenster in der Band. Auch die Setlist.'),
+        T('⚡', 'Springe zu', 'Direkt zur Gig-, Termin-, Setlist- oder Checklisten-Seite einer Band springen: Band wählen (bei mehreren Bands), dann öffnet sich die passende Seite.'),
         T('🎤', 'Dein nächster Gig', 'Zeigt den nächsten Gig aus allen deinen Bands (bis ein Jahr voraus) mit Countdown, Ort und Zeitplan. „Gig öffnen“ springt direkt zum Gig in der Band.'),
         T('📅', 'Deine Termine', '„Deine nächsten Termine“ zeigt Gigs und Termine aller deiner Bands der nächsten 60 Tage. Ein Klick öffnet den Termin in der Band.'),
         T('☑️', 'Deine Checklisten-Punkte', 'Alle offenen Punkte, die du in irgendeiner Band übernommen hast – mit Band, was und wann.'),

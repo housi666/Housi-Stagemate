@@ -1,4 +1,4 @@
-/*! StageMate v0.5.0 · Build 74 · 2026-11-18 */
+/*! StageMate v0.5.1 · Build 75 · 2026-11-18 */
   :root {
     --sidebar-w: 248px;
     --sidebar-w-collapsed: 68px;
@@ -1224,6 +1224,7 @@
   .ovm-roles { font-size: 12px; color: var(--muted); }
   .ovm-st { font-size: 12px; color: var(--muted); text-align: right; flex: none; max-width: 45%; }
   .ovm-st.on { color: #16a34a; font-weight: 600; }
+  .pf-links { margin-bottom: 14px; }
   .legal-row { display: flex; gap: 8px 18px; flex-wrap: wrap; margin-top: 16px; }
   .vis-row { display: flex; flex-direction: column; gap: 4px; }
   .vis-band { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 16px; }
