@@ -1,4 +1,4 @@
-/*! StageMate v0.4.50 · Build 72 · 2026-11-17 */
+/*! StageMate v0.5.0 · Build 74 · 2026-11-18 */
 /* StageMate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -393,6 +393,17 @@
     const note = ($('fFoodNote').value || '').trim().slice(0, 200), share = $('fFoodShare').checked;
     return diet.length || allergens.length || note ? { diet, allergens, note, share } : null;
   }
+  async function foodSaveOnly() {
+    const m = $('foodMsg'); if (!profile) return setMsg(m, 'Bitte lege zuerst dein Profil an.', 'error');
+    $('foodSave').disabled = true; setMsg(m, 'Wird gespeichert …');
+    try {
+      const p = clone(profile); p.food = foodRead(); p.updatedAt = new Date().toISOString();
+      await db.doc('members/' + uid).set(p); profile = p;
+      setMsg(m, 'Gespeichert ✓', 'ok'); flash('Ernährung gespeichert ✓');
+    } catch (e) { setMsg(m, friendlyError(e), 'error'); }
+    $('foodSave').disabled = readOnly;
+  }
+  $('foodSave').addEventListener('click', foodSaveOnly);
   function genCode() {
     const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let s = ''; const r = new Uint32Array(6); crypto.getRandomValues(r);
@@ -406,6 +417,9 @@
   let currentBand = null;
   let currentPage = 'overview';
   let suggestedName = '';
+  let pendingReg = null;   // Registrierung läuft: Formularwerte bleiben, bis das Konto steht
+  let fbLoginShown = false;   // Konto-Anmeldung der Web-Version ist sichtbar
+  const regMode = () => fbLoginShown && !uid;
   let suggestedEmail = '';   // E-Mail des Kontos (Web-Version)
   let readOnly = false;
   let activeTab = 'login';
@@ -641,7 +655,7 @@
     $('fLast').value = profile?.lastName || '';
     $('fEmail').value = profile?.email || suggestedEmail || '';
     // Web-Version: die E-Mail des Kontos gilt, kein zweites E-Mail-Feld
-    $('fEmailField').classList.toggle('hidden', Data.backend === 'firebase');
+    $('fEmailField').classList.toggle('hidden', Data.backend === 'firebase' && !regMode());
     $('fTerms').checked = false;
     $('termsWrap').classList.toggle('hidden', !needsTerms());
     regTag = ''; mountRegTag();
@@ -650,41 +664,25 @@
     $('fPhone').value = profile?.phone || ''; foodFill(profile && profile.food);
     photoDraft = undefined; setMsg($('photoMsg'), ''); renderPhoto();
     $('fCode').value = ''; $('fBandName').value = '';
-    joinBand = null; joinEntry = null;
+    joinBand = null; joinEntry = null; setMsg($('bandAddMsg'), '');
     const f = $('joinFound'); f.className = 'found muted'; f.textContent = 'Gib den Band-Code (6 Zeichen) oder deinen persönlichen Code (8 Zeichen) ein.';
 
     editRoles = {};
-    const wrap = $('myBands'); wrap.innerHTML = '';
-    // Rollen werden im Profil weder angezeigt noch geändert (das macht der Admin unter „Verwaltung“)
-    ids.forEach(id => {
-      const card = el('div', 'band-card');
-      const head = el('div', 'band-card-head');
-      head.append(el('span', 'bname', bands[id].name + (isFounder(id) ? '  · Admin' : '')));
-      if (bands[id].tag) head.append(tagChip(bands[id].tag));
-      head.append(el('span', 'bcode', 'Code ' + bands[id].code));
-      card.append(head);
-      const hint = el('button', 'linkish-btn band-share-link', 'Sichtbarkeit von E-Mail und Telefon → Einstellungen'); hint.type = 'button';
-      hint.addEventListener('click', () => showPage('settings'));
-      card.append(hint);
-      wrap.appendChild(card);
-    });
     // Rollen nur bei der allerersten Registrierung auswählen
     $('newRolesField').classList.toggle('hidden', !!profile);
-    $('myBandsBlock').classList.toggle('hidden', !hasBands);
 
     if (profile) {
-      $('regTitle').textContent = 'Profil & Bands';
-      $('regHint').textContent = hasBands ? 'Ändere deine Angaben – oder tritt einer weiteren Band bei.' : 'Tritt einer Band bei oder gründe eine neue.';
-      $('newBandTitle').textContent = hasBands ? 'Weitere Band hinzufügen' : 'Deine Band';
+      $('regTitle').textContent = 'Profil';
+      $('regHint').textContent = 'Ändere deine Angaben. Bands trittst du auf dem Startbildschirm bei oder gründest sie dort.';
       $('regBtn').textContent = 'Speichern';
     } else {
-      $('regTitle').textContent = 'Registrieren';
-      $('regHint').textContent = 'Lege dein Profil an und gründe eine Band oder tritt einer bei.';
-      $('newBandTitle').textContent = 'Deine Band';
-      $('regBtn').textContent = 'Registrieren';
+      $('regTitle').textContent = regMode() ? 'Registrieren' : 'Profil anlegen';
+      $('regHint').textContent = regMode() ? 'Lege dein Profil und dein Passwort fest. Danach bist du automatisch angemeldet.' : 'Ergänze dein Profil. Bands findest du danach auf dem Startbildschirm.';
+      $('regBtn').textContent = regMode() ? 'Registrieren' : 'Speichern';
     }
-    $('noneModeBtn').classList.toggle('hidden', !hasBands);
-    setBandMode(hasBands ? 'none' : 'join');
+    $('regOnly').classList.toggle('hidden', !regMode());
+    ['fRegPw', 'fRegPw2'].forEach(id => { $(id).value = ''; }); $('fTestBand').checked = false;
+    setBandMode('none');
     $('regBtn').disabled = readOnly;
     setMsg($('regMsg'), readOnly ? 'Du hast nur Leserechte. Bitte den Besitzer der App, dich als Mitwirkende/n freizugeben.' : '', readOnly ? 'error' : '');
     profileSnap = profileState();
@@ -712,12 +710,11 @@
     });
   }
 
-  form.addEventListener('submit', async ev => {
-    ev.preventDefault();
-    const msg = $('regMsg');
+  async function submitProfile() {
+    const msg = !$('bandAddModal').classList.contains('hidden') ? $('bandAddMsg') : $('regMsg');
     const name = $('fName').value.trim();
     const firstName = $('fFirst').value.trim(), lastName = $('fLast').value.trim();
-    const email = Data.backend === 'firebase' ? (Data.email || '') : $('fEmail').value.trim();
+    const email = Data.backend === 'firebase' && !regMode() ? (Data.email || '') : $('fEmail').value.trim();
     const acceptTerms = needsTerms();
     const phone = $('fPhone').value.trim();
     if (name.length < 2) return setMsg(msg, 'Bitte gib einen Nickname ein (mind. 2 Zeichen).', 'error');
@@ -726,6 +723,19 @@
     if (!lastName) return setMsg(msg, 'Bitte gib deinen Nachnamen ein.', 'error');
     if (acceptTerms && !$('fTerms').checked) return setMsg(msg, 'Bitte akzeptiere die Nutzungsbedingungen und die Datenschutzerklärung.', 'error');
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setMsg(msg, 'Die E-Mail-Adresse sieht nicht gültig aus.', 'error');
+    // Registrierung (noch kein Konto): zuerst das Konto anlegen, danach speichert finish() das Profil automatisch
+    if (regMode()) {
+      if (!email) return setMsg(msg, 'Bitte gib eine E-Mail-Adresse ein (sie darf zum Testen erfunden sein).', 'error');
+      const pw = $('fRegPw').value;
+      if (pw.length < 6) return setMsg(msg, 'Das Passwort braucht mindestens 6 Zeichen.', 'error');
+      if (pw !== $('fRegPw2').value) return setMsg(msg, 'Die beiden Passwörter stimmen nicht überein.', 'error');
+      const rb = $('regBtn'); rb.disabled = true; setMsg(msg, 'Konto wird erstellt …');
+      pendingReg = { testBand: $('fTestBand').checked };
+      const r = await Data.signUp(email, pw);
+      rb.disabled = false;
+      if (!r.ok) { pendingReg = null; return setMsg(msg, r.error, 'error'); }
+      return;   // finish() übernimmt: Profil speichern und in den Startbildschirm
+    }
     for (const id in editRoles) {
       if (editRoles[id].size === 0) return setMsg(msg, `Bitte wähle mindestens eine Rolle für „${bands[id].name}“.`, 'error');
     }
@@ -793,6 +803,7 @@
       if (added && newBandMode === 'create') text = `Band „${added.name}“ ${fmtTag(added.tag)} gegründet! Du bist Admin. Einladungscode: ${added.code}`;
       else if (added) text = `Willkommen bei „${added.name}“!`;
       setMsg(msg, text, 'ok');
+      if (added) $('bandAddModal').classList.add('hidden');
 
       if (isNew || added || acceptTerms || !$('app').classList.contains('hidden')) {
         const fromAuth = $('app').classList.contains('hidden');
@@ -809,7 +820,8 @@
     } finally {
       btn.disabled = readOnly;
     }
-  });
+  }
+  form.addEventListener('submit', ev => { ev.preventDefault(); submitProfile(); });
 
   // ================= Nutzungsbedingungen & Datenschutz =================
   const needsTerms = () => !profile || !profile.terms || profile.terms.version !== LEGAL_VERSION;
@@ -894,7 +906,7 @@
     b.addEventListener('contextmenu', e => e.preventDefault());
     wrap.appendChild(b);
   }
-  ['accPwOld', 'accPwNew', 'accPwNew2', 'accDelPw'].forEach(id => enhancePw($(id)));
+  ['accPwOld', 'accPwNew', 'accPwNew2', 'accDelPw', 'fRegPw', 'fRegPw2'].forEach(id => enhancePw($(id)));
 
   // ================= Konto (nur Web-Version) =================
   function renderAccount() {
@@ -967,7 +979,7 @@
   }
 
   $('loginBtn').addEventListener('click', () => {
-    if (!bandIdsOf(profile).length || needsTerms()) return showTab('register');
+    if (needsTerms() || (!bandIdsOf(profile).length && Data.backend !== 'firebase')) return showTab('register');
     enterHub();
   });
 
@@ -1009,7 +1021,7 @@
     sorted.forEach(id => list.append(bandCard(id)));
     const foot = el('div', 'bov-foot');
     const add = el('button', 'linkish-btn', '+ Band beitreten oder gründen'); add.type = 'button';
-    add.addEventListener('click', () => { hideBandsOverview(); showTab('register'); });
+    add.addEventListener('click', () => { hideBandsOverview(); enterHub(); hubAddBandMode('join'); });
     const out = el('button', 'linkish-btn bov-out', 'Abmelden'); out.type = 'button';
     out.addEventListener('click', async () => { ls.sdel('bandLoggedIn'); if (await Data.signOut()) return; hideBandsOverview(); showTab('login'); });
     foot.append(add, out);
@@ -1091,7 +1103,7 @@
       inner.appendChild(b);
     });
     const add = el('button', 'band-opt add', '+ Band beitreten oder gründen'); add.type = 'button';
-    add.addEventListener('click', () => { $('bandSwitchWrap').classList.remove('open'); showPage('profile'); });
+    add.addEventListener('click', () => { $('bandSwitchWrap').classList.remove('open'); hubAddBandMode('join'); });
     inner.appendChild(add);
     wrap.appendChild(inner);
   }
@@ -1325,12 +1337,17 @@
     loadHubAgenda();
   }
   function hubAddBandMode(m) {
-    const blk = $('addBandBlock'); blk.classList.remove('folded');
+    if (!profile) return;
     if (!isProfileDirty()) prepareForm();
-    setBandMode(m);
-    openHubSection('profile', blk);
-    setTimeout(() => { const f = m === 'create' ? $('fBandName') : $('fCode'); if (f) f.focus(); }, 300);
+    setBandMode(m); setMsg($('bandAddMsg'), '');
+    $('bandAddModal').classList.remove('hidden');
+    setTimeout(() => { const f = m === 'create' ? $('fBandName') : $('fCode'); if (f) f.focus(); }, 80);
   }
+  const bandAddClose = () => { $('bandAddModal').classList.add('hidden'); setBandMode('none'); };
+  $('bandAddX').addEventListener('click', bandAddClose);
+  $('bandAddCancel').addEventListener('click', bandAddClose);
+  $('bandAddModal').addEventListener('click', e => { if (e.target === $('bandAddModal')) bandAddClose(); });
+  $('bandAddGo').addEventListener('click', () => { if (newBandMode === 'none') return; submitProfile(); });
   $('hubAddBand').addEventListener('click', () => hubAddBandMode('create'));
   $('hubJoinBand').addEventListener('click', () => hubAddBandMode('join'));
   // Band suchen (Name oder Tag) – Sichtbarkeit der Band gilt auch hier
@@ -5742,7 +5759,7 @@
     acts.append(one, all);
     if (single) {
       // Nur eine Band: Weg zu „Deine Bands“, um eine weitere hinzuzufügen
-      acts.appendChild(el('div', 'csm-single', 'Du bist nur in einer Band. Unter „Profil und Bands“ kannst du einer weiteren beitreten oder eine gründen.'));
+      acts.appendChild(el('div', 'csm-single', 'Du bist nur in einer Band. Auf dem Startbildschirm kannst du einer weiteren beitreten oder eine gründen.'));
       const go = el('button', 'btn small ghost csm-bands', '🎸 Zu deinen Bands →'); go.type = 'button';
       go.addEventListener('click', e => { e.stopPropagation(); closeSortMenu(); showAddBand(); });
       acts.appendChild(go);
@@ -5752,16 +5769,8 @@
     link.addEventListener('click', e => { e.stopPropagation(); closeSortMenu(); showPage('settings'); });
     m.appendChild(link);
   }
-  // Zu „Profil und Bands“ springen und „Weitere Band hinzufügen“ kurz aufleuchten lassen
-  function showAddBand() {
-    showPage('profile');
-    setTimeout(() => {
-      const b = $('addBandBlock'); if (!b) return;
-      b.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      b.classList.remove('pulse-hl'); void b.offsetWidth; b.classList.add('pulse-hl');
-      setTimeout(() => b.classList.remove('pulse-hl'), 2600);
-    }, 80);
-  }
+  // „Band beitreten oder gründen“ als Fenster öffnen
+  function showAddBand() { hubAddBandMode('join'); }
   function closeSortMenu() { $('clpSortMenu').classList.add('hidden'); }
   $('clpSortMenu').addEventListener('click', e => e.stopPropagation());
   document.addEventListener('click', () => closeSortMenu());
@@ -7196,11 +7205,12 @@
   // ----- Konto-Anmeldung (nur Web-Version mit Firebase) -----
   let fbPane = null, fbTab = 'in';
   function showFbLogin(offline) {
+    fbLoginShown = true;
     const card = document.querySelector('#auth .auth-side .card');
     if (!fbPane) {
       fbPane = el('div'); fbPane.id = 'fbAuthPane';
       fbPane.innerHTML = `
-        <div class="tabs"><button type="button" class="tab active" data-fbtab="in">Anmelden</button><button type="button" class="tab" data-fbtab="up">Konto erstellen</button></div>
+        <div class="tabs"><button type="button" class="tab active" data-fbtab="in">Anmelden</button><button type="button" class="tab" data-fbtab="up">Registrieren</button></div>
         <h2 id="fbTitle">Willkommen zurück</h2>
         <p class="hint" id="fbHint">Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.</p>
         <form id="fbForm" novalidate>
@@ -7218,21 +7228,25 @@
           <button type="submit" class="btn" id="fbGo">Anmelden</button>
         </form>
         <button type="button" class="linkish-btn" id="fbReset" style="margin-top:12px">Passwort vergessen?</button>
-        <div class="msg" id="fbMsg"></div>`;
+        <div class="msg" id="fbMsg"></div>
+        <div id="fbRegSlot" class="hidden"></div>`;
       card.prepend(fbPane);
       const setTab = t => {
         fbTab = t;
         fbPane.querySelectorAll('[data-fbtab]').forEach(b => b.classList.toggle('active', b.dataset.fbtab === t));
         const up = t === 'up';
-        $('fbTitle').textContent = up ? 'Konto erstellen' : 'Willkommen zurück';
-        $('fbHint').textContent = up ? 'Erstelle dein StageMate-Konto. Danach trittst du deiner Band bei oder gründest eine.' : 'Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.';
-        $('fbPw2Wrap').classList.toggle('hidden', !up);
-        $('fbPw').autocomplete = up ? 'new-password' : 'current-password';
+        // Registrieren: das Profil-Formular (mit Passwort) erscheint direkt hier; Anmelden: nur E-Mail und Passwort
+        ['fbTitle', 'fbHint', 'fbForm', 'fbReset', 'fbMsg'].forEach(id => $(id).classList.toggle('hidden', up));
+        $('fbRegSlot').classList.toggle('hidden', !up);
+        if (up) { $('fbRegSlot').appendChild(form); prepareForm(); } else $('registerSlot').appendChild(form);
+        $('fbTitle').textContent = 'Willkommen zurück';
+        $('fbHint').textContent = 'Melde dich mit deiner E-Mail-Adresse und deinem Passwort an.';
+        $('fbPw2Wrap').classList.add('hidden');
+        $('fbPw').autocomplete = 'current-password';
         // Angaben aus „Anmelden“ nicht in „Konto erstellen“ übernehmen (und umgekehrt)
         EMAIL_PARTS.forEach(id => { $(id).value = ''; });
         ['fbPw', 'fbPw2'].forEach(id => { $(id).value = ''; $(id).type = 'password'; });
-        $('fbGo').textContent = up ? 'Konto erstellen' : 'Anmelden';
-        $('fbReset').classList.toggle('hidden', up);
+        $('fbGo').textContent = 'Anmelden';
         setMsg($('fbMsg'), '');
       };
       fbPane.querySelectorAll('[data-fbtab]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.fbtab)));
@@ -7243,10 +7257,8 @@
         const email = emailValue(), pw = $('fbPw').value;
         if (!EMAIL_PARTS.every(id => $(id).value.trim()) || !pw) return setMsg($('fbMsg'), 'Bitte E-Mail (alle drei Felder) und Passwort eingeben.', 'error');
         if (!emailValid()) return setMsg($('fbMsg'), 'Diese E-Mail-Adresse sieht nicht gültig aus.', 'error');
-        if (fbTab === 'up' && pw !== $('fbPw2').value) return setMsg($('fbMsg'), 'Die beiden Passwörter stimmen nicht überein.', 'error');
-        if (fbTab === 'up' && pw.length < 6) return setMsg($('fbMsg'), 'Das Passwort braucht mindestens 6 Zeichen.', 'error');
-        $('fbGo').disabled = true; setMsg($('fbMsg'), fbTab === 'up' ? 'Konto wird erstellt …' : 'Anmelden …');
-        const r = fbTab === 'up' ? await Data.signUp(email, pw) : await Data.signIn(email, pw);
+        $('fbGo').disabled = true; setMsg($('fbMsg'), 'Anmelden …');
+        const r = await Data.signIn(email, pw);
         $('fbGo').disabled = false;
         if (!r.ok) setMsg($('fbMsg'), r.error, 'error');
         else setMsg($('fbMsg'), 'Angemeldet – einen Moment …', 'ok');
@@ -7266,17 +7278,38 @@
     }
   }
   function hideFbLogin() {
+    fbLoginShown = false;
     const card = document.querySelector('#auth .auth-side .card');
     if (card) card.classList.remove('fb-mode');
-    if (fbPane) { fbPane.remove(); fbPane = null; }
+    if (fbPane) { $('registerSlot').appendChild(form); fbPane.remove(); fbPane = null; }
   }
 
+  // Zufällige Testband (TBA-01 … TBA-05) für neue Testpersonen
+  async function pickTestBand() {
+    const codes = ['TBA01X', 'TBA02X', 'TBA03X', 'TBA04X', 'TBA05X'];
+    for (let i = codes.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [codes[i], codes[j]] = [codes[j], codes[i]]; }
+    for (const c of codes) { try { const b = await findBandByCode(c); if (b) return b; } catch (e) {} }
+    return null;
+  }
+  async function runPendingReg(pr) {
+    activeTab = 'register'; renderAuth();
+    setBandMode('none');
+    if (pr.testBand) {
+      const tb = await pickTestBand();
+      if (tb) { joinBand = tb; joinEntry = null; $('fCode').value = tb.code; newRoles = new Set(['Organisation']); newBandMode = 'join'; }
+      else setMsg($('regMsg'), 'Es wurde keine Testband gefunden. Du wirst ohne Band angelegt.', 'error');
+    }
+    submitProfile();
+  }
   function finish() {
+    if (pendingReg && !profile) { const pr = pendingReg; pendingReg = null; runPendingReg(pr); return; }
+    pendingReg = null;
     prepareForm();
     showTab(profile ? 'login' : 'register');
     // Neue Fassung der Nutzungsbedingungen: zuerst akzeptieren
     if (profile && needsTerms()) { showTab('register'); setMsg($('regMsg'), 'Bitte akzeptiere die Nutzungsbedingungen, um weiterzumachen.', 'error'); return; }
-    if (!profile || !bandIdsOf(profile).length) return;
+    if (!profile) return;
+    if (!bandIdsOf(profile).length && Data.backend !== 'firebase') return;
     // Neu geladen während der Sitzung: direkt zurück in die App
     if (ls.sget('bandLoggedIn') === '1') return ls.sget('smView') === 'hub' ? enterHub() : enterApp(ls.sget('smBand') || profile.lastBand);
     // Web-Version: nach der Konto-Anmeldung zuerst der Startbildschirm

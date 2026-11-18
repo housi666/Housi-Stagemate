@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StageMate – Testdaten</title>
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #0f1014; color: #e8e9ee; margin: 0; padding: 32px 18px; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { margin: 0 0 6px; } h1 span { color: #e8a33d; }
+  p { color: #9a9daa; line-height: 1.5; }
+  .box { background: #1a1b22; border: 1px solid #2c2e38; border-radius: 14px; padding: 18px; margin: 16px 0; }
+  button { font: inherit; font-weight: 700; border: none; border-radius: 10px; padding: 11px 18px; cursor: pointer; margin: 4px 8px 4px 0; }
+  .go { background: #e8a33d; color: #1b1c22; } .del { background: #c0392b; color: #fff; } button:disabled { opacity: .5; cursor: wait; }
+  code { background: #0b0c10; border: 1px solid #2c2e38; border-radius: 6px; padding: 2px 6px; color: #e8a33d; }
+  #log { background: #07080b; border: 1px solid #2a2c36; border-radius: 10px; padding: 12px; font: 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace; height: 340px; overflow: auto; white-space: pre-wrap; }
+  .ok { color: #22c55e; } .err { color: #f87171; }
+  .bar { height: 8px; background: #2c2e38; border-radius: 99px; overflow: hidden; margin-top: 10px; } .bar > div { height: 100%; width: 0; background: #e8a33d; transition: width .2s; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>StageMate <span>Testdaten</span></h1>
+  <p>Erstellt <b>30 Testkonten</b> (<code>testuid-01@stagemate.test</code> … <code>testuid-30@stagemate.test</code>, Nickname = E-Mail-Adresse),
+  <b>5 Bands</b> (<code>TBA-01</code> … <code>TBA-05</code>), <b>7 Gigs</b> mit allen Angaben (je 4 Bands pro Gig) und pro Band und Gig eine Checkliste.</p>
+  <div class="box">
+    <div>Passwort aller Testkonten: <code id="pw"></code></div>
+    <p style="margin:10px 0 0">Läuft in einem eigenen Hintergrund-Zugang – dein eigenes Konto bleibt angemeldet. Damit du Admin von TBA-01 wirst, musst du in StageMate (im gleichen Browser) mit deinem Konto angemeldet sein. Dauer: etwa 1–2 Minuten.
+    <b>Nach dem Erstellen diese Datei wieder von GitHub löschen</b>, damit niemand sonst sie ausführt.</p>
+    <div id="meBox" style="margin-top:12px; padding:10px 12px; border-radius:10px; background:#0b0c10; border:1px solid #2c2e38">Prüfe dein Konto …</div>
+    <label style="display:flex; gap:8px; align-items:center; margin-top:10px; color:#c9cbd6"><input type="checkbox" id="meAdmin" checked> Mich als <b>Admin (Gründer)</b> von <b>TBA-01</b> eintragen</label>
+    <div style="margin-top:14px">
+      <button class="go" id="go">Testdaten erstellen</button>
+      <button class="go" id="meOnly" style="background:#3b82f6;color:#fff">Nur mich als Admin von TBA-01 eintragen</button>
+      <button class="del" id="del">Testdaten löschen</button>
+    </div>
+    <div class="bar"><div id="bar"></div></div>
+  </div>
+  <div id="log"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="legal.js"></script>
+<script>
+(() => {
+  const PW = 'Stagemate-Test1';  // Passwort unverändert (nicht umbenennen: bestehende Testkonten)
+  const N_USERS = 30, N_BANDS = 5, N_GIGS = 7;
+  const $ = id => document.getElementById(id);
+  $('pw').textContent = PW;
+  const pad = n => String(n).padStart(2, '0');
+  const email = i => `testuid-${pad(i)}@stagemate.test`;
+  const nick = i => `TESTUID-${pad(i)}@stagemate.test`;
+  const bandId = b => `tba-${pad(b)}`;
+  const logEl = $('log');
+  const log = (t, cls) => { const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = t; logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight; };
+  const bar = p => { $('bar').style.width = Math.round(p * 100) + '%'; };
+  if (!window.STAGEMATE_FIREBASE || !window.firebase) { log('Firebase konnte nicht geladen werden (firebase-config.js im selben Ordner?).', 'err'); return; }
+  // Hauptzugang = dein in StageMate angemeldetes Konto (gleiche Adresse, gleiche Anmeldung)
+  const main = firebase.apps.length ? firebase.app() : firebase.initializeApp(window.STAGEMATE_FIREBASE);
+  const MA = main.auth(), MF = main.firestore();
+  let me = null;
+  MA.onAuthStateChanged(u => {
+    me = u && !/@stagemate\.test$/.test(u.email || '') ? u : null;
+    $('meBox').innerHTML = me ? `✅ Angemeldet als <b>${me.email}</b> – wird Admin von TBA-01.` : '⚠️ Nicht angemeldet: Melde dich zuerst in StageMate (gleicher Browser) mit deinem eigenen Konto an und lade diese Seite neu. Ohne Anmeldung werden nur die Testdaten erstellt.';
+  });
+  // Hintergrund-Zugang für die Testkonten
+  const app = firebase.initializeApp(window.STAGEMATE_FIREBASE, 'stagemate-testdaten');
+  const A = app.auth(), F = app.firestore();
+  const now = () => new Date().toISOString();
+
+  // ---------- Verteilung ----------
+  const ROLES = ['Gesang', 'Gitarre', 'Bass', 'Schlagzeug', 'Keyboard', 'Backing Vocals', 'Percussion', 'Bläser', 'Technik'];
+  const DEFAULT_ROLES = ['Gründer', 'Gesang', 'Backing Vocals', 'Gitarre', 'Bass', 'Schlagzeug', 'Percussion', 'Keyboard', 'Bläser', 'Technik', 'Organisation', 'Checkliste'];
+  const founder = b => b;                          // TESTUID-01 gründet TBA-01 usw.
+  const bandsOfUser = i => {
+    const out = [((i - 1) % N_BANDS) + 1];         // jede Person ist in einer Hauptband (6 pro Band)
+    if (i % 4 === 0) { const x = ((i + 1) % N_BANDS) + 1; if (!out.includes(x)) out.push(x); }   // jede 4. Person in einer zweiten Band
+    return out;
+  };
+  const membersOf = b => { const l = []; for (let i = 1; i <= N_USERS; i++) if (bandsOfUser(i).includes(b)) l.push(i); return l; };
+  const rolesFor = (i, b) => {
+    if (founder(b) === i) return ['Gründer', ROLES[(i + b) % ROLES.length]];
+    const ms = membersOf(b).filter(x => x !== founder(b));
+    const r = [ROLES[(i * 3 + b) % ROLES.length]];
+    if (ms[0] === i) r.push('Organisation');
+    if (ms[1] === i) r.push('Checkliste');
+    return r;
+  };
+  const gigBands = g => { const skip = ((g - 1) % N_BANDS) + 1; return [1, 2, 3, 4, 5].filter(b => b !== skip); };
+  const VENUES = [
+    ['Stadtfest Bern', 'Bundesplatz', 'Bundesplatz 3, 3011 Bern', 'Parkhaus Casino, Einfahrt Kochergasse'],
+    ['Rock im Hof', 'Kulturhof Schloss Köniz', 'Muhlernstrasse 9, 3098 Köniz', 'Parkplatz beim Schloss, 10 Plätze reserviert'],
+    ['Clubnacht Zürich', 'Dynamo', 'Wasserwerkstrasse 21, 8006 Zürich', 'Anlieferung über Hof, Parkieren im Parkhaus Central'],
+    ['Open Air Thun', 'Schadaupark', 'Seestrasse 45, 3600 Thun', 'Bandparkplatz hinter der Bühne'],
+    ['Herbstfest Luzern', 'Schüür', 'Tribschenstrasse 1, 6005 Luzern', 'Laden vor dem Eingang, danach Parkhaus Bahnhof'],
+    ['Metal Night Basel', 'Sommercasino', 'Münchensteinerstrasse 1, 4052 Basel', '2 Parkplätze im Hof'],
+    ['Jahresabschluss St. Gallen', 'Grabenhalle', 'Unterer Graben 17, 9000 St. Gallen', 'Parkhaus Unterer Graben'],
+  ];
+  const gigDate = g => { const d = new Date(); d.setDate(d.getDate() + 5 + g * 7); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  let cid = 0; const id = () => 't' + Date.now().toString(36) + (cid++).toString(36);
+  function checklistFor(g, b, uidOf) {
+    const ms = membersOf(b).map(uidOf);
+    const it = (title, k, done) => ({ id: id(), title, members: [ms[k % ms.length]], done: !!done, createdBy: ms[0], createdAt: now() });
+    return [
+      { id: id(), title: 'Material', createdBy: ms[0], createdAt: now(), members: [], items: [it('Kabel und Adapter', 1, g % 2), it('Ersatzsaiten und Sticks', 2), it('Merch-Kiste', 3, true)] },
+      { id: id(), title: 'Organisation', createdBy: ms[0], createdAt: now(), members: [], items: [it('Setlist drucken', 0, true), it('Fahrplan an alle', 1), it('Gästeliste melden', 4)] },
+      { id: id(), title: 'Nach dem Gig', createdBy: ms[0], createdAt: now(), members: [ms[2 % ms.length]], items: [] },
+    ];
+  }
+  function gigEvent(g, b, uidOf) {
+    const [title, venue, address, parking] = VENUES[(g - 1) % VENUES.length];
+    const date = gigDate(g), fb = uidOf(founder(b));
+    const others = gigBands(g).map(x => `TBA-${pad(x)}`);
+    const slot = gigBands(g).indexOf(b);
+    const start = ['19:00', '20:00', '21:00', '22:00'][slot] || '20:00', end = ['19:45', '20:45', '21:45', '23:00'][slot] || '21:00';
+    return {
+      title: `Testgig ${pad(g)} – ${title}`, date, allDay: false, start, end,
+      location: venue, address, parking, mapsUrl: 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address),
+      notes: `Line-up: ${others.join(', ')}. Unser Slot: ${start}–${end}. Testdaten von StageMate.`,
+      schedule: { getin: ['15:00', '15:30', '16:00', '16:30'][slot] || '16:00', aufbau: ['15:30', '16:00', '16:30', '17:00'][slot] || '16:30', soundcheck: ['16:30', '17:00', '17:30', '18:00'][slot] || '17:30', linecheck: ['18:45', '19:45', '20:45', '21:45'][slot] || '19:45' },
+      catering: 'Abendessen ab 18:00 im Backstage, 2 Getränke pro Person, Wasser auf der Bühne.',
+      links: ['https://www.example.ch/veranstaltung-' + g, 'https://www.example.ch/tickets-' + g],
+      contacts: [
+        { name: 'Veranstalter Test ' + pad(g), role: 'Veranstalter', phone: '079 555 0' + pad(g) + ' 00', email: `veranstalter${pad(g)}@example.ch` },
+        { name: 'Technik Test ' + pad(g), role: 'Tontechnik', phone: '078 444 0' + pad(g) + ' 11', email: `technik${pad(g)}@example.ch` },
+      ],
+      docs: [], category: 'auftritt', repeat: { freq: 'none' }, exdates: [],
+      checklist: true, checklists: { [date]: checklistFor(g, b, uidOf) },
+      createdBy: fb, createdAt: now(), updatedBy: fb, updatedAt: now(), testData: true,
+    };
+  }
+
+  // 10 Testsongs pro Band
+  const SONG_TITLES = ['Nachtfahrt', 'Neonlicht', 'Letzter Zug', 'Staub und Gold', 'Echo', 'Sturmwarnung', 'Funkenflug', 'Blaue Stunde', 'Rückwärtsgang', 'Zugabe für dich'];
+  const GENRES = ['Rock', 'Punk', 'Pop', 'Blues', 'Metal'];
+  const RELS = [['album', 'Test-Album'], ['ep', 'Test-EP'], ['single', 'Test-Single']];
+  function testSongs(b) {
+    return SONG_TITLES.map((t, k) => { const r = RELS[(k + b) % 3]; return { id: `testsong-${pad(b)}-${pad(k + 1)}`, d: {
+      title: t, artist: 'TBA-' + pad(b), relType: r[0], album: r[1] + ' ' + (1 + (k % 3)), year: 2018 + ((k + b) % 8), genre: GENRES[(k + b) % GENRES.length],
+      dur: 170 + ((k * 37 + b * 11) % 120), key: ['Am', 'C', 'Em', 'G', 'D'][k % 5], bpm: 90 + ((k * 13 + b * 7) % 70) } }; });
+  }
+
+  // ---------- Anmeldung im Hintergrund ----------
+  async function signAs(i, create) {
+    try { await A.signInWithEmailAndPassword(email(i), PW); }
+    catch (e) {
+      if (!create) throw e;
+      if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential' || e.code === 'auth/invalid-login-credentials') await A.createUserWithEmailAndPassword(email(i), PW);
+      else throw e;
+    }
+    return A.currentUser.uid;
+  }
+
+  async function create() {
+    const uids = {};
+    const total = N_USERS * 2 + N_BANDS * 3; let done = 0; const step = () => bar(++done / total);
+    log('1/5 Konten und Profile …');
+    for (let i = 1; i <= N_USERS; i++) { uids[i] = await signAs(i, true); step(); }
+    const uidOf = i => uids[i];
+    for (let i = 1; i <= N_USERS; i++) {
+      await signAs(i);
+      const bs = bandsOfUser(i), memberships = {};
+      bs.forEach(b => { memberships[bandId(b)] = { roles: rolesFor(i, b), joinedAt: now(), share: { email: true, phone: i % 3 !== 0 } }; });
+      await F.doc('members/' + uids[i]).set({
+        name: nick(i), nickKey: nick(i).toLowerCase(), firstName: 'Test', lastName: 'Person ' + pad(i),
+        puid: 'PUID-' + String(90000000 + i), photoPublic: true,
+        bandIds: bs.map(bandId), memberships, lastBand: bandId(bs[0]),
+        terms: { version: typeof LEGAL_VERSION !== 'undefined' ? LEGAL_VERSION : '2026-11-16', acceptedAt: now() },
+        createdAt: now(), updatedAt: now(), testData: true,
+      });
+      await F.doc('contacts/' + uids[i]).set({ email: email(i), phone: '079 000 00 ' + pad(i), updatedAt: now() });
+      log(`  ✓ ${nick(i)} → ${bs.map(b => 'TBA-' + pad(b)).join(', ')}`); step();
+    }
+    log('2/5 Bands …');
+    for (let b = 1; b <= N_BANDS; b++) {
+      await signAs(founder(b));
+      const assignments = {}; membersOf(b).forEach(i => { assignments[uids[i]] = rolesFor(i, b); });
+      await F.doc(`bandadmin/${uids[founder(b)]}/bands/${bandId(b)}`).set({
+        roles: DEFAULT_ROLES, access: { defaults: {}, members: {} }, assignments, extra: {}, removed: {},
+        categories: [{ id: 'probe', name: 'Probe', color: '#3b82f6' }, { id: 'auftritt', name: 'Gig', color: '#8b5cf6' }, { id: 'sitzung', name: 'Sitzung', color: '#e8a33d' }, { id: 'sonstiges', name: 'Sonstiges', color: '#10b981' }],
+        logo: null, admins: [], updatedAt: now(), rolesAt: now(),
+      });
+      await F.doc('bands/' + bandId(b)).set({
+        name: 'TBA-' + pad(b), code: 'TBA0' + b + 'X', tag: 'TB' + b, tagAt: now(), tagAtMs: 0,
+        show: { logo: true, name: true, tag: true }, createdBy: uids[founder(b)], createdAt: now(), testData: true,
+      });
+      log(`  ✓ TBA-${pad(b)} (Code TBA0${b}X, Admin ${nick(founder(b))}, ${membersOf(b).length} Mitglieder)`); step();
+    }
+    log('3/5 Gigs mit Checklisten …');
+    for (let b = 1; b <= N_BANDS; b++) {
+      await signAs(founder(b));
+      for (let g = 1; g <= N_GIGS; g++) if (gigBands(g).includes(b)) await F.doc(`calendar/${bandId(b)}/events/testgig-${pad(g)}`).set(gigEvent(g, b, uidOf));
+      log(`  ✓ TBA-${pad(b)}: ${[...Array(N_GIGS)].map((_, k) => k + 1).filter(g => gigBands(g).includes(b)).length} Gigs`); step();
+    }
+    log('4/5 Songs und Setlist (nur Bands ohne Setlist) …');
+    for (let b = 1; b <= N_BANDS; b++) {
+      await signAs(founder(b));
+      const have = await F.collection(`setlists/${bandId(b)}/lists`).get();
+      if (!have.empty) { log(`  – TBA-${pad(b)}: hat schon eine Setlist, übersprungen`); step(); continue; }
+      const songs = testSongs(b);
+      for (const s of songs) await F.doc(`songs/${bandId(b)}/items/${s.id}`).set({ ...s.d, draft: false, updatedAt: now(), testData: true });
+      await F.doc(`setlists/${bandId(b)}/lists/testset-${pad(b)}`).set({
+        name: `Testset ${pad(b)}`, gigId: 'testgig-' + pad([...Array(N_GIGS)].map((_, k) => k + 1).find(g => gigBands(g).includes(b))), start: '20:00', targetMin: 40, vis: 'intern', dupAck: '', createdBy: uids[founder(b)], createdAt: now(), updatedAt: now(), testData: true,
+        items: songs.map(s => ({ id: 'i' + s.id, type: 'song', ...s.d, note: '' })),
+      });
+      log(`  ✓ TBA-${pad(b)}: ${songs.length} Songs und 1 Setlist`); step();
+    }
+    log('5/5 Timetables (pro Gig die Line-up-Zeiten, verknüpft mit Bands und Setlists) …');
+    for (let b = 1; b <= N_BANDS; b++) {
+      try {
+        await signAs(founder(b));
+        // Setlist der Band: Test-Setlist, sonst die erste vorhandene
+        const lists = await F.collection(`setlists/${bandId(b)}/lists`).get();
+        const docs = lists.docs.map(d => ({ id: d.id, ...d.data() }));
+        const sl = docs.find(x => x.id === `testset-${pad(b)}`) || docs[0] || null;
+        const firstG = [...Array(N_GIGS)].map((_, k) => k + 1).find(g => gigBands(g).includes(b));
+        if (sl && !sl.gigId) await F.doc(`setlists/${bandId(b)}/lists/${sl.id}`).set({ gigId: 'testgig-' + pad(firstG) }, { merge: true });
+        for (let g = 1; g <= N_GIGS; g++) {
+          if (!gigBands(g).includes(b)) continue;
+          const starts = ['19:00', '20:00', '21:00', '22:00'], ends = ['19:45', '20:45', '21:45', '23:00'];
+          const entries = gigBands(g).map((x, k) => ({ id: `tt-${pad(g)}-${pad(x)}`, time: starts[k] || '20:00', band: `TBA-${pad(x)}`, end: ends[k] || '', dur: 0, songs: x === b && sl ? ((sl.items || []).filter(i => i.type === 'song').length || 10) : 0, setlistId: x === b && sl ? sl.id : '', note: x === b ? 'Unser Slot' : '' }));
+          await F.doc(`timetables/${bandId(b)}/lists/testgig-${pad(g)}`).set({ gigId: `testgig-${pad(g)}`, entries, updatedAt: now(), testData: true });
+        }
+        log(`  ✓ TBA-${pad(b)}: Timetables${sl ? ', Setlist „' + (sl.name || sl.id) + '“ verknüpft' : ' (keine Setlist vorhanden)'}`);
+      } catch (e) { log(`  ✗ TBA-${pad(b)}: ${e.code || e.message}${/permission/i.test(e.code || e.message) ? ' – firestore.rules in der Firebase-Konsole veröffentlichen (Regel „timetables“)' : ''}`, 'err'); }
+    }
+    await A.signOut();
+    if ($('meAdmin').checked && me) await makeMeAdmin();
+    else if ($('meAdmin').checked) log('Hinweis: Du warst nicht angemeldet – später mit „Nur mich als Admin von TBA-01 eintragen“ nachholen.', 'err');
+    log('Fertig! Melde dich z.B. mit ' + email(1) + ' und dem Passwort oben an.', 'ok');
+  }
+
+  // Dich als Admin (Gründer) von TBA-01 eintragen
+  async function makeMeAdmin() {
+    if (!me) throw new Error('Nicht angemeldet – melde dich zuerst in StageMate mit deinem Konto an und lade diese Seite neu.');
+    const B = bandId(1);
+    log('Trage ' + me.email + ' als Admin von TBA-01 ein …');
+    const mref = MF.doc('members/' + me.uid), ms = await mref.get();
+    if (!ms.exists) throw new Error('Dein Profil fehlt – registriere dich zuerst in StageMate.');
+    const d = ms.data();
+    const bandIds = [...new Set([...(d.bandIds || []), B])];
+    await mref.set({ ...d, bandIds, memberships: { ...(d.memberships || {}), [B]: { roles: ['Gründer', 'Organisation'], joinedAt: now(), share: { email: true, phone: true } } }, lastBand: B, updatedAt: now() });
+    const bref = MF.doc('bands/' + B), bs = await bref.get();
+    if (!bs.exists) throw new Error('TBA-01 gibt es noch nicht – zuerst die Testdaten erstellen.');
+    const band = bs.data(), old = band.createdBy;
+    const oc = old ? await MF.doc(`bandadmin/${old}/bands/${B}`).get() : null;
+    const cfg = oc && oc.exists ? oc.data() : { roles: DEFAULT_ROLES, access: { defaults: {}, members: {} }, extra: {}, removed: {}, admins: [] };
+    const assignments = { ...(cfg.assignments || {}) };
+    if (old && assignments[old]) assignments[old] = assignments[old].filter(r => r !== 'Gründer');
+    assignments[me.uid] = ['Gründer', 'Organisation'];
+    await MF.doc(`bandadmin/${me.uid}/bands/${B}`).set({ ...cfg, assignments, updatedAt: now(), rolesAt: now() });
+    await bref.set({ ...band, createdBy: me.uid, previousAdmin: old || null });
+    log('  ✓ Du bist jetzt Admin (Gründer) von TBA-01. Lade StageMate neu (Ctrl + F5).', 'ok');
+  }
+  async function removeMe() {
+    if (!me) return;
+    const B = bandId(1);
+    try {
+      const mref = MF.doc('members/' + me.uid), ms = await mref.get();
+      if (ms.exists) { const d = ms.data(); const memberships = { ...(d.memberships || {}) }; delete memberships[B]; await mref.set({ ...d, bandIds: (d.bandIds || []).filter(x => x !== B), memberships, lastBand: d.lastBand === B ? null : d.lastBand }); }
+      await MF.doc(`bandadmin/${me.uid}/bands/${B}`).delete();
+      log('  ✓ Dein Konto aus TBA-01 entfernt', 'ok');
+    } catch (e) { log('  – Dein Konto: ' + (e.code || e.message), 'err'); }
+  }
+
+  async function remove() {
+    log('Lösche Gigs und Bands …');
+    let total = N_BANDS + N_USERS, done = 0; const step = () => bar(++done / total);
+    const uids = {};
+    for (let b = 1; b <= N_BANDS; b++) {
+      try {
+        const u = await signAs(founder(b)); uids[founder(b)] = u;
+        for (let g = 1; g <= N_GIGS; g++) await F.doc(`calendar/${bandId(b)}/events/testgig-${pad(g)}`).delete().catch(() => {});
+        for (let k = 1; k <= 10; k++) await F.doc(`songs/${bandId(b)}/items/testsong-${pad(b)}-${pad(k)}`).delete().catch(() => {});
+        for (let g = 1; g <= N_GIGS; g++) await F.doc(`timetables/${bandId(b)}/lists/testgig-${pad(g)}`).delete().catch(() => {});
+        await F.doc(`setlists/${bandId(b)}/lists/testset-${pad(b)}`).delete().catch(() => {});
+        await F.doc('bands/' + bandId(b)).delete().catch(() => {});
+        await F.doc(`bandadmin/${u}/bands/${bandId(b)}`).delete().catch(() => {});
+        log(`  ✓ TBA-${pad(b)}`);
+      } catch (e) { log(`  – TBA-${pad(b)}: ${e.code || e.message}`, 'err'); }
+      step();
+    }
+    log('Lösche Konten …');
+    for (let i = 1; i <= N_USERS; i++) {
+      try {
+        const u = await signAs(i);
+        for (const c of ['members', 'contacts', 'presence', 'private']) await F.doc(`${c}/${u}`).delete().catch(() => {});
+        await A.currentUser.delete();
+        log(`  ✓ ${nick(i)}`);
+      } catch (e) { log(`  – ${nick(i)}: ${e.code || e.message}`, 'err'); }
+      step();
+    }
+    await removeMe();
+    log('Testdaten gelöscht.', 'ok');
+  }
+
+  const run = async fn => {
+    $('go').disabled = $('del').disabled = $('meOnly').disabled = true; bar(0);
+    try { await fn(); } catch (e) { log('Fehler: ' + (e.code || e.message), 'err'); }
+    finally { $('go').disabled = $('del').disabled = $('meOnly').disabled = false; }
+  };
+  $('go').addEventListener('click', () => { if (confirm('30 Testkonten, 5 Bands, 7 Gigs, Songs, Setlists und Timetables erstellen?')) run(create); });
+  $('meOnly').addEventListener('click', () => run(makeMeAdmin));
+  $('del').addEventListener('click', () => { if (confirm('Alle Testdaten und Testkonten löschen?')) run(remove); });
+})();
+</script>
+</body>
+</html>

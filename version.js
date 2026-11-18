@@ -1,16 +1,22 @@
-/*! StageMate v0.4.50 · Build 72 · 2026-11-17 */
+/*! StageMate v0.5.0 · Build 74 · 2026-11-18 */
 /* StageMate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.4.50';
-const APP_BUILD = 72;
-const APP_BUILD_DATE = '2026-11-17';
+const APP_VERSION = 'v0.5.0';
+const APP_BUILD = 74;
+const APP_BUILD_DATE = '2026-11-18';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.5.0', date: '2026-11-18', items: [
+    { type: 'neu', text: 'Registrieren mit Profil: Profilbild, Nickname, Name, Vorname, E-Mail, Telefon, Passwort (zweimal). Danach bist du automatisch angemeldet und landest in der persönlichen Übersicht. Keine Band nötig.' },
+    { type: 'neu', text: 'Optional: einer zufälligen Testband beitreten (Rolle Organisation). Hinweis zur erfundenen E-Mail im Formular (kein Passwort-Zurücksetzen möglich).' },
+    { type: 'besser', text: 'Profilseite ohne Bands und ohne Ernährung. Band hinzufügen läuft über ein eigenes Fenster in der Übersicht, Ernährung und Allergien stehen in den Einstellungen.' },
+    { type: 'besser', text: 'Start-Fenster: Wer sich freiwillig anmeldet, ist automatisch im Testprogramm.' }
+  ] },
   { version: 'v0.4.50', date: '2026-11-17', items: [
     { type: 'neu', text: 'Info-Fenster beim Start: grosser Titel „WICHTIG“, Hinweis auf Anmeldung mit ungültiger E-Mail zu Testzwecken und Erklärung zum Umgang mit Daten.' }
   ] },
