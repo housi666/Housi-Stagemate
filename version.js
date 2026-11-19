@@ -1,16 +1,20 @@
-/*! StageMate v0.5.3 · Build 77 · 2026-11-18 */
+/*! StageMate v0.5.4 · Build 78 · 2026-11-19 */
 /* StageMate – Version, Build und Changelog
  * Wird von bump.sh automatisch angepasst (APP_VERSION, APP_BUILD, APP_BUILD_DATE).
  * Versionsregel: kleine Änderung = letzte Zahl +1, grössere Änderung = mittlere Zahl +1,
  * die erste Zahl bestimmt Housi.
  */
-const APP_VERSION = 'v0.5.3';
-const APP_BUILD = 77;
-const APP_BUILD_DATE = '2026-11-18';
+const APP_VERSION = 'v0.5.4';
+const APP_BUILD = 78;
+const APP_BUILD_DATE = '2026-11-19';
 const APP_PHASE = 'Alpha';
 
 // Neueste Version zuerst. Typen: neu | besser | fix | intern
 const APP_CHANGELOG = [
+  { version: 'v0.5.4', date: '2026-11-19', items: [
+    { type: 'intern', text: 'Neues Firebase-Projekt (stagemate-d0a66, Region Zürich) mit neuer Verbindung. Konten und Daten aus dem alten Projekt kommen nicht mit, Registrierung neu nötig.' },
+    { type: 'intern', text: 'Diagnose-Anzeige liest den Projektnamen aus der Verbindung statt fest eingetragen.' }
+  ] },
   { version: 'v0.5.3', date: '2026-11-18', items: [
     { type: 'besser', text: 'Entwickler-Anmeldung: Das Fenster schliesst nur noch über X oder Abbrechen, nicht mehr durch Klick daneben.' },
     { type: 'besser', text: 'Versteckter Zugang: 7 Klicks auf das Housi-Zeichen (statt 5). Ab dem 4. Klick läuft ein Zähler („Noch 3 Klicks …“), wie beim Android-Entwicklermodus.' }

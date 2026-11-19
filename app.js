@@ -1,4 +1,4 @@
-/*! StageMate v0.5.3 · Build 77 · 2026-11-18 */
+/*! StageMate v0.5.4 · Build 78 · 2026-11-19 */
 /* StageMate – App-Logik (Oberfläche, Register, Rechte) */
   // Version, Build und Changelog kommen aus js/version.js
   document.querySelectorAll('[data-app-version]').forEach(n => { n.textContent = APP_VERSION; n.title = `${APP_PHASE} · Build ${APP_BUILD} · ${APP_BUILD_DATE}`; });
@@ -7035,7 +7035,7 @@
     // Diagnose: was wurde geladen, wo gab es Fehler
     const diag = el('div', 'dev-diag');
     const cnt = k => devData[k] && devData[k].error ? `${k}: Fehler (${devData[k].error})` : `${k}: ${devArr(devData[k]).length}`;
-    diag.append(el('b', null, 'Diagnose: '), `Speicher ${Data.usesFirebase ? 'Firebase (housi-stagemate)' : Data.backend === 'claude' ? 'Claude-Artefakt (nur Daten dieses Artefakts)' : 'nur dieser Browser (lokal)'} · Entwickler-UID ${devUid || '–'} · ` + ['bands', 'members', 'contacts', 'presence'].map(cnt).join(' · '));
+    diag.append(el('b', null, 'Diagnose: '), `Speicher ${Data.usesFirebase ? 'Firebase (' + ((window.STAGEMATE_FIREBASE && window.STAGEMATE_FIREBASE.projectId) || '?') + ')' : Data.backend === 'claude' ? 'Claude-Artefakt (nur Daten dieses Artefakts)' : 'nur dieser Browser (lokal)'} · Entwickler-UID ${devUid || '–'} · ` + ['bands', 'members', 'contacts', 'presence'].map(cnt).join(' · '));
     body.append(diag);
     ['bands', 'members', 'contacts', 'presence'].forEach(k => { const e = devErr(k, devData[k]); if (e) body.append(e); });
     if (!devArr(devData.bands).length && !devArr(devData.members).length && !['bands', 'members'].some(k => devData[k] && devData[k].error))
